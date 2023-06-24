@@ -44,8 +44,16 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+
   "main": "./out/extension.js",
   "contributes": {
+        "themes": [
+          {
+            "label": "No color Dark",
+            "uiTheme": "vs-dark",
+            "path": "./themes/no-color-dark-color-theme.json"
+          }
+        ],
         "semanticTokenScopes": [
           {
             "scopes": {

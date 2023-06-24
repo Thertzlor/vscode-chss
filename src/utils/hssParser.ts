@@ -2,8 +2,8 @@ import {TokenData} from './rangesByName';
 import { Range } from 'vscode';
 
 interface ParsedRule {type:string, specificity:number, name:string, modifiers:string[], scopes?:string[]}
-interface HssRule  {selector: ParsedRule[], style:Record<string,string>}
-interface HssMatch  {range:Range, style:Record<string,string>, parsed:ParsedRule}
+interface HssRule {selector: ParsedRule[], style:Record<string,string>}
+interface HssMatch {range:Range, style:Record<string,string>, specificity:number}
 
 function parseRule(selector:string):ParsedRule{
   const invalid = {specificity:0, name:'', type:'',modifiers:[]}
@@ -16,12 +16,12 @@ function parseRule(selector:string):ParsedRule{
       default: return invalid;
     }
   }
-  if(selector.startsWith('[') && selector.indexOf(']') ===  selector.length-1) return {specificity:1, name:'', type:selector,modifiers:[]} // general type: [variable]
+  if(selector.startsWith('[') && selector.indexOf(']') ===  selector.length-1) return {specificity:1, name:'', type:selector.slice(1,-1),modifiers:[]} // general type: [variable]
   if(selector.startsWith('[')){ // extended type with one or more modifiers: [variable]:readonly
-    const modsplit = selector.split(':')
-    const sel = modsplit.shift()?.slice(1,-1) ?? ''
-    if(!modsplit.length || !sel || !sel.endsWith(']')) return invalid
-    return {specificity:1+(modsplit.length*10), name:'', type:sel,modifiers:[]}
+    const modifiers = selector.split(':')
+    const sel = modifiers.shift() ?? ''
+    if(!modifiers.length || !sel || !sel.endsWith(']')) return invalid
+    return {specificity:1+(modifiers.length*10), name:'', type:sel.slice(1,-1),modifiers}
   }
   if(selector.includes('[') && selector.includes(']')){ //compound: name[variable]:readonly
     if(!/\w/.test(selector.charAt(0))) return invalid
@@ -50,7 +50,6 @@ export function parseHss(str:string){
   let skipNext = false
   for (const [i,v] of str.split(/[{}]/gm).map(s=>s.trim()).entries()) {
     const selector = i % 2 === 0;
-
     if(skipNext){skipNext = false; continue}
     if(selector && !v) {skipNext = true;continue}
 
@@ -76,15 +75,30 @@ export function parseHss(str:string){
 
 export function processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssRule[]):HssMatch[]{
   const matched:HssMatch[] = []
+  const combined = new Map<string,HssMatch>()
+  console.log({rules})
   for (const {selector,style} of rules) {
     for (const parsed of selector) {
-      const target = 'variable'
+      const target = parsed.type
       if(!(target in rangeObject)) continue;
-      for (const {name,range,modifiers,type} of rangeObject[target]) {
-        if((!parsed.name || parsed.name === name) && (!parsed.type || parsed.type === type) && (!parsed.modifiers.some(m=> !modifiers.includes(m))))
-        matched.push({range,style, parsed})
+      for (const {name,range,modifiers} of rangeObject[target]) {
+        if((!parsed.name || parsed.name === name) && (!parsed.modifiers.some(m=> !modifiers.includes(m))))
+        matched.push({range,style,specificity:parsed.specificity})
       }
     }
   }
-  return matched
+
+  for ( const m of matched.sort((a,b) => a.specificity > b.specificity?1:-1)){
+    const {range} =m;
+    const rangeIdent = [range.start.line,range.start.character,range.end.line,range.end.character].join('|')
+    if(!combined.has(rangeIdent)){
+      combined.set(rangeIdent, m)
+    }else {
+      const current = combined.get(rangeIdent)!
+      combined.set(rangeIdent,{range:current.range, style:{...current.style, ...m.style} , specificity:1})
+    }
+  }
+
+
+  return [...combined.values()]
 }
