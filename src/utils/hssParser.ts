@@ -65,7 +65,8 @@ export function parseHss(str:string){
       const ruleObj = {} as Record<string,string>
       for (const r of rules) {
         const [name,value] = r.split(':');
-        if(name && value) ruleObj[name]=value
+        if(name && value) {
+          ruleObj[name.trim()]=value.trim()}
       }
       res[res.length-1].style = ruleObj
     }
@@ -99,6 +100,6 @@ export function processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssR
     }
   }
 
-
-  return [...combined.values()]
+ 
+  return  [...combined.values()]
 }
