@@ -1,18 +1,23 @@
-import {TokenData} from './rangesByName';
-import { Range } from 'vscode';
+import {type TokenData} from './rangesByName';
+import { Range ,languages, type TextDocument, RelativePattern, type Uri } from 'vscode';
 
 interface ParsedRule {type:string, specificity:number, name:string, modifiers:string[], scopes?:string[]}
-interface HssRule {selector: ParsedRule[], style:Record<string,string>}
+interface HssRule {selector: ParsedRule[], style:Record<string,string>, scope?:string}
 interface HssMatch {range:Range, style:Record<string,string>, specificity:number}
 
-function parseRule(selector:string):ParsedRule{
+export class HssParser{
+  constructor(
+    private baseUri?:Uri
+  ){}
+
+  private parseRule(selector:string):ParsedRule{
   const invalid = {specificity:0, name:'', type:'',modifiers:[]}
   if(/^\w+$/.test(selector))return {specificity:10, name:selector, type:'variable',modifiers:[]}; //simple variable: name
   if(/^\w+$/.test(selector.slice(1))){ 
     const sliced = selector.charAt(0)
     switch (sliced) {
-      case '.': return {specificity:100, name:sliced, type:'class',modifiers:[]} //class: .name
-      case '#':return {specificity:100, name:sliced, type:'function',modifiers:[]} //function: #name
+      case '.': return {specificity:100, name:selector.slice(1), type:'class',modifiers:[]} //class: .name
+      case '#':return {specificity:100, name:selector.slice(1), type:'function',modifiers:[]} //function: #name
       default: return invalid;
     }
   }
@@ -38,28 +43,34 @@ function parseRule(selector:string):ParsedRule{
   const splitMods = selector.split(':');
   const ident = splitMods.shift();
   if(!ident) return invalid;
-  const {specificity,name,type} = parseRule(ident)
+  const {specificity,name,type} = this.parseRule(ident)
   if(specificity === 0) return invalid;
   return {specificity:specificity+(10*splitMods.length), name, type,modifiers:splitMods}
 }
 
 
-
-export function parseHss(str:string){
+  public parseHss(str:string){
   const res = [] as HssRule[]
   let skipNext = false
-  for (const [i,v] of str.split(/[{}]/gm).map(s=>s.trim()).entries()) {
-    const selector = i % 2 === 0;
+  let currentScope:string|undefined
+  for (const [i,v] of str.replace(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s=>s.trim()).entries()) {
+    const selector = (i + (currentScope?1:0)) % 2 === 0;
+    if(currentScope && !v){currentScope = undefined;continue}
     if(skipNext){skipNext = false; continue}
-    if(selector && !v) {skipNext = true;continue}
-
+    if(selector && !v ) {skipNext = true;continue}
     if(selector){
-      const selectors = v.split(',').map(s=>s.trim()).filter(s=>s).map(s=> (parseRule(s))).filter(({specificity}) => specificity !== 0)
+      if(v.startsWith('@scope')){
+        currentScope = v.match(/.*\((.*)\)$/)?.[1].trim() || '???'
+        continue
+      }
+      const selectors = v.split(',').map(s=>s.trim()).filter(s=>s).map(s=> (this.parseRule(s))).filter(({specificity}) => specificity !== 0)
       if(!selectors.length){skipNext = true;continue}
-      res.push({selector:selectors,style:{}})
+      const protoRule:HssRule = {selector:selectors,style:{}}
+      if(currentScope)protoRule.scope = currentScope
+      res.push(protoRule)
     }
     else{
-      if(!v){res.pop();continue}
+      if(!v || v === "empty"){res.pop();continue}
       const rules = v.split(';').map(s=>s.trim()).filter(s=>s)
       if(!rules.length){res.pop();continue}
       const ruleObj = {} as Record<string,string>
@@ -74,11 +85,13 @@ export function parseHss(str:string){
   return res
 }
 
-export function processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssRule[]):HssMatch[]{
+
+  public processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssRule[],doc?:TextDocument):HssMatch[]{
   const matched:HssMatch[] = []
   const combined = new Map<string,HssMatch>()
-  console.log({rules})
-  for (const {selector,style} of rules) {
+  console.log(JSON.stringify(rules,undefined,2))
+  for (const {selector,style,scope} of rules) {
+    if(scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue
     for (const parsed of selector) {
       const target = parsed.type
       if(!(target in rangeObject)) continue;
@@ -88,6 +101,7 @@ export function processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssR
       }
     }
   }
+  
 
   for ( const m of matched.sort((a,b) => a.specificity > b.specificity?1:-1)){
     const {range} =m;
@@ -102,4 +116,6 @@ export function processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssR
 
  
   return  [...combined.values()]
+}
+
 }
