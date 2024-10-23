@@ -46,6 +46,19 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "css": {
+      "customData": [
+        "./css.css-data.json"
+      ]
+    },
+    "languages": [
+      {
+        "id": "scss",
+        "extensions": [
+          ".hss"
+        ]
+      }
+    ],
     "themes": [
       {
         "label": "No color Dark",
