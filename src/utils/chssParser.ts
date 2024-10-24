@@ -5,13 +5,13 @@ import color from 'tinycolor2';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 interface ParsedSelector {type:string, specificity:number, name:string, modifiers:string[], scopes?:string[],match?:MatchType,regexp?:RegExp}
-interface HssRule {selector:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
-interface ProtoHssMatch {range:Range, style:Record<string,string>, specificity:number,colorActions?:Map<string,[ColorAction,string]>}
-type HssMatch = Omit<ProtoHssMatch,'colorActions'>;
+interface ChssRule {selector:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
+interface ProtoChssMatch {range:Range, style:Record<string,string>, specificity:number,colorActions?:Map<string,[ColorAction,string]>}
+type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','greyscale','spin','random'] as const;
 type ColorAction = typeof colorMods[number];
 
-export class HssParser{
+export class ChssParser{
   constructor(
     private readonly baseUri?:Uri,
     private readonly colorMap= new Map<string,string>()
@@ -72,8 +72,8 @@ export class HssParser{
    * A gnarly minimal parser for pseudo css.
    * @param source -The source code of the file
    */
-  public parseHss(source:string){
-    const res = [] as HssRule[];
+  public parseChss(source:string){
+    const res = [] as ChssRule[];
     let skipNext = false;
     let currentScope:string|undefined;
     for (const [i,v] of source.replaceAll(/\/\/.*/g,'').replaceAll(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s => s.trim()).entries()) {
@@ -88,7 +88,7 @@ export class HssParser{
         }
         const selectors = v.split(',').map(s => s.trim()).filter(s => s).map(s => this.parseSelector(s)).filter(({specificity}) => specificity !== 0);
         if (!selectors.length){skipNext = true; continue;}
-        const protoRule:HssRule = {selector:selectors,style:{}};
+        const protoRule:ChssRule = {selector:selectors,style:{}};
         if (currentScope)protoRule.scope = currentScope;
         res.push(protoRule);
       }
@@ -122,9 +122,9 @@ export class HssParser{
     return !!name[type](val);
   }
 
-  public processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssRule[],doc?:TextDocument):HssMatch[]{
-    const matched:ProtoHssMatch[] = [];
-    const combined = new Map<string,HssMatch>();
+  public processChss(rangeObject:Record<string, Set<TokenData>>,rules:ChssRule[],doc?:TextDocument):ChssMatch[]{
+    const matched:ProtoChssMatch[] = [];
+    const combined = new Map<string,ChssMatch>();
     for (const {selector,style,scope,colorActions} of rules) {
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
       for (const parsed of selector) {

@@ -1,7 +1,7 @@
 {
-  "name": "vscode-hss",
+  "name": "vscode-chss",
   "displayName": "CHSS: Code Highlighting Style Sheets",
-  "description": "Theme identifiers by name.",
+  "description": "Real time semantic theming with css-like style",
   "version": "0.0.9",
   "license": "GPL-3.0-or-later",
   "publisher": "thertzlor",
@@ -24,18 +24,18 @@
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
-      "title": "HSS - Highlighting Style Sheets",
+      "title": "CHSS Code Highlighting Style Sheets",
       "properties": {
-        "hss.styleLocation": {
+        "chss.styleLocation": {
           "type": "string",
-          "default": "*.hss",
+          "default": "*.chss",
           "description": "path or glob pattern for your code stylesheet.",
           "title": "Stylesheet Location"
         },
-        "hss.realtimeHss": {
+        "chss.realtimeChss": {
           "type": "boolean",
           "default": true,
-          "description": "Apply style updates in real-time while editing the .hss file.",
+          "description": "Apply style updates in real-time while editing the .chss file.",
           "title": "Immediate Stylesheet Updates"
         }
       }
@@ -44,7 +44,7 @@
       {
         "id": "scss",
         "extensions": [
-          ".hss"
+          ".chss"
         ]
       }
     ],
@@ -211,7 +211,7 @@
   "dependencies": {
     "tinycolor2": "^1.6.0",
     "typescript": "^5.6.3",
-    "vscode-hss": "file:",
+    "vscode-chss": "file:",
     "vscode-textmate-languageservice": "^3.0.1"
   }
 }

@@ -1,7 +1,7 @@
 import {workspace,window, TextEditorDecorationType,commands} from 'vscode';
 import type {Range, ExtensionContext, SemanticTokens, SemanticTokensLegend, Uri,ConfigurationChangeEvent} from 'vscode';
 import {rangesByName} from './utils/rangesByName';
-import {HssParser} from './utils/hssParser';
+import {ChssParser} from './utils/chssParser';
 import {TextDecoder} from 'util';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
@@ -10,23 +10,22 @@ export async function activate(context:ExtensionContext) {
     // const selector: vscode.DocumentSelector = 'custom';
     // const textmateService = new TextmateLanguageService('typescript', context);
     // const textmateTokenService = await textmateService.initTokenService();
-  const getConfig = getConfigGeneric('hss');
+  const getConfig = getConfigGeneric('chss');
   const loadFile = async() => (await workspace.findFiles(getConfig<string>('styleLocation')))[0] as Uri|undefined;
-  let directUpdate = getConfig<boolean>('realtimeHss');
-  console.log(directUpdate);
-  let hssFile = await loadFile();
-  if (!hssFile) return;
-  const hssText = new TextDecoder().decode(await workspace.fs.readFile(hssFile));
-  const parser = new HssParser(workspace.workspaceFolders?.[0]?.uri);
+  let directUpdate = getConfig<boolean>('realtimeChss');
+  let chssFile = await loadFile();
+  if (!chssFile) return;
+  const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile));
+  const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
   const decorations = new Map<string,Map<string,[TextEditorDecorationType,Range[]]>>();
 
   async function onDidChangeConfiguration(e:ConfigurationChangeEvent) {
-    e.affectsConfiguration('hss.styleLocation') && (hssFile = await loadFile());
-    e.affectsConfiguration('hss.realtimeHss') && (directUpdate = getConfig('realtimeHss'));
+    e.affectsConfiguration('chss.styleLocation') && (chssFile = await loadFile());
+    e.affectsConfiguration('chss.realtimeChss') && (directUpdate = getConfig('realtimeChss'));
   }
   context.subscriptions.push(workspace.onDidChangeConfiguration(onDidChangeConfiguration));
 
-  let rules = parser.parseHss(hssText);
+  let rules = parser.parseChss(chssText);
   const processEditor = async(editor = window.activeTextEditor,full=false) => {
     if (!editor) return;
     const textDocument = editor.document;
@@ -44,10 +43,10 @@ export async function activate(context:ExtensionContext) {
     const legend:SemanticTokensLegend | undefined = await commands.executeCommand('vscode.provideDocumentSemanticTokensLegend', uri);
     if (!tokensData || !legend) return;
         // const tokens = await textmateTokenService.fetch(textDocument);
-        // console.log(await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider',vscode.window.activeTextEditor?.document.uri))
+    console.log(await commands.executeCommand('vscode.executeDocumentSymbolProvider',window.activeTextEditor?.document.uri));
     const ranges = rangesByName(tokensData,legend,editor);
-    const hss = parser.processHss(ranges,rules,textDocument);
-    for (const {style,range} of hss) {
+    const chss = parser.processChss(ranges,rules,textDocument);
+    for (const {style,range} of chss) {
       const stryle = JSON.stringify(style);
       if (decos.has(stryle)){
         const doco = decos.get(stryle)!;
@@ -66,8 +65,8 @@ export async function activate(context:ExtensionContext) {
   window.onDidChangeActiveTextEditor(e => processEditor(e));
   workspace.onDidChangeTextDocument(e => {
     if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
-    if (e.document.uri.toString() === hssFile?.toString() && (directUpdate || !e.document.isDirty)) {
-      rules = parser.parseHss(e.document.getText());
+    if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
+      rules = parser.parseChss(e.document.getText());
       for (const ed of window.visibleTextEditors) processEditor(ed,true);
     }
     else processEditor();
