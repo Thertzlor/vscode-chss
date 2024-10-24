@@ -70,7 +70,7 @@ export class HssParser{
     const res = [] as HssRule[];
     let skipNext = false;
     let currentScope:string|undefined;
-    for (const [i,v] of str.replaceAll(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s => s.trim()).entries()) {
+    for (const [i,v] of str.replaceAll(/\/\/.*/g,'').replaceAll(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s => s.trim()).entries()) {
       const selector = (i + (currentScope?1:0)) % 2 === 0;
       if (currentScope && !v){currentScope = undefined; continue;}
       if (skipNext){skipNext = false; continue;}
