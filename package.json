@@ -207,10 +207,20 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@stylistic/eslint-plugin": "^2.9.0",
     "@types/node": "^16.11.7",
-    "@types/vscode": "^1.94.0"
+    "@types/tinycolor2": "^1.4.6",
+    "@types/vscode": "^1.94.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-no-autofix": "^2.1.0",
+    "eslint-plugin-tsdoc": "^0.3.0",
+    "eslint-plugin-unicorn": "^56.0.0",
+    "globals": "^15.11.0",
+    "typescript-eslint": "^8.11.0"
   },
   "dependencies": {
+    "tinycolor2": "^1.6.0",
     "typescript": "^5.6.3",
     "vscode-hss": "file:",
     "vscode-textmate-languageservice": "^3.0.1"
