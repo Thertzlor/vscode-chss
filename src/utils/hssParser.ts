@@ -3,19 +3,20 @@ import {Range ,languages, type TextDocument, RelativePattern, type Uri} from 'vs
 import color from 'tinycolor2';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
-interface ParsedRule {type:string, specificity:number, name:string, modifiers:string[], scopes?:string[],match?:MatchType,regexp?:RegExp}
-interface HssRule {selector:ParsedRule[], style:Record<string,string>, scope?:string}
-interface HssMatch {range:Range, style:Record<string,string>, specificity:number}
-
+interface ParsedSelector {type:string, specificity:number, name:string, modifiers:string[], scopes?:string[],match?:MatchType,regexp?:RegExp}
+interface HssRule {selector:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
+interface ProtoHssMatch {range:Range, style:Record<string,string>, specificity:number,colorActions?:Map<string,[ColorAction,string]>}
+type HssMatch = Omit<ProtoHssMatch,'colorActions'>;
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','greyscale','spin'] as const;
 type ColorAction = typeof colorMods[number];
 
 export class HssParser{
   constructor(
-    private readonly baseUri?:Uri
+    private readonly baseUri?:Uri,
+    private readonly colorMap= new Map<string,string>()
   ){}
 
-  private parseSelector(selector:string):ParsedRule{
+  private parseSelector(selector:string):ParsedSelector{
     const invalid = {specificity:0, name:'', type:'',modifiers:[]};
     if (selector === '*') return {specificity:1, name:'', type:'*',modifiers:[]};
     if (/^\w+$/.test(selector)) return {specificity:50, name:selector, type:'*',modifiers:[]}; //simple variable: name
@@ -46,8 +47,8 @@ export class HssParser{
       return {specificity:10+(modifiers.length*10), name:'', type:sel.slice(1,-1),modifiers};
     }
     if (selector.includes('[') && selector.includes(']')){ //compound: name[variable]:readonly
-      if (!/\w/.test(selector.charAt(0))) return invalid;
-      const splitUp = selector.split(/\[]/gm);
+      if (!/\w/.test(selector.charAt(0))) return invalid;//eslint-disable-next-line unicorn/better-regex
+      const splitUp = selector.split(/\[|\]/gm);
       const name = splitUp.shift()!;
       const type = splitUp.shift();
       const mods = splitUp.shift();
@@ -90,12 +91,21 @@ export class HssParser{
         const rules = v.split(';').map(s => s.trim()).filter(s => s);
         if (!rules.length){res.pop(); continue;}
         const ruleObj = {} as Record<string,string>;
+        const cMap= new Map<string,[ColorAction,string]>();
         for (const r of rules) {
-          const [name,value] = r.split(':');
+          const [name,value] = r.split(':').map(s => s.trim());
           if (name && value) {
-            ruleObj[name.trim().replaceAll(/-(\w)/gm,a => a[1].toUpperCase())]=value.trim();}
+            if (colorMods.some(m => value.startsWith(`${m}(`))){
+              const [mode,arg] = value.split(/\(|\)/gm).map(s => s.trim());
+              cMap.set(name,[mode as ColorAction,arg]);
+            }
+            else ruleObj[name.replaceAll(/-(\w)/gm,a => a[1].toUpperCase())]=value;}
         }
-        if (res.at(-1)) res.at(-1)!.style = ruleObj;
+        const cuRule = res.at(-1);
+        if (cuRule){
+          cuRule.style = ruleObj;
+          if (cMap.size) cuRule.colorActions=cMap;
+        }
       }
     }
     return res;
@@ -107,29 +117,47 @@ export class HssParser{
   }
 
   public processHss(rangeObject:Record<string, Set<TokenData>>,rules:HssRule[],doc?:TextDocument):HssMatch[]{
-    const matched:HssMatch[] = [];
+    const matched:ProtoHssMatch[] = [];
     const combined = new Map<string,HssMatch>();
-    for (const {selector,style,scope} of rules) {
+    for (const {selector,style,scope,colorActions} of rules) {
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
       for (const parsed of selector) {
         const targetType = parsed.type;
         if (!(targetType in rangeObject) && targetType !== '*') continue;
         for (const {name,range,modifiers} of targetType === '*'?Object.keys(rangeObject).flatMap(k => [...rangeObject[k]]):rangeObject[targetType]) {
           // console.log({parsed,matched : parsed.match && this.matchName(name,parsed.match, parsed.name,parsed.regexp)})
-          if ((!parsed.name || parsed.name === name || (parsed.match && this.matchName(name,parsed.match, parsed.name,parsed.regexp))) && !parsed.modifiers.some(m => !modifiers.includes(m))) matched.push({range,style,specificity:parsed.specificity});
+          if ((!parsed.name || parsed.name === name || (parsed.match && this.matchName(name,parsed.match, parsed.name,parsed.regexp))) && !parsed.modifiers.some(m => !modifiers.includes(m))) matched.push({range,style,colorActions,specificity:parsed.specificity});
         }
       }
     }
 
-    for (const m of matched){
-      const {range, style} =m;
+    for (const current of matched){
+      const {range, style,colorActions} =current;
       const rangeIdent = [range.start.line,range.start.character,range.end.line,range.end.character].join('|');
       if (!combined.has(rangeIdent)){
-        combined.set(rangeIdent, m);
+        combined.set(rangeIdent, current);
       } else {
-        const current = combined.get(rangeIdent)!;
-        const [sA, sB] = [current,m].map(s => s.specificity);
-        combined.set(rangeIdent,{range:current.range, style:sA<=sB?{...current.style, ...style}:{...style, ...current.style} , specificity:Math.max(sA,sB)});
+        const old = combined.get(rangeIdent)!;
+        const [sA, sB] = [current,old].map(s => s.specificity);
+        if ((sA>=sB) && colorActions){
+          for (const [name,[action,args]] of colorActions.entries()) {
+            if (!(name in old.style)) continue;
+            const colorIdent = [old.style[name],action,args].join('-');
+            if (this.colorMap.has(colorIdent)) {
+              style[name] = this.colorMap.get(colorIdent)!;
+              continue;
+            }
+            const oldCol = color(old.style[name]);
+            if (!oldCol.isValid()) continue;
+            const newCol = oldCol[action](parseInt(args,10));
+            if (newCol.isValid()) {
+              const hexa =newCol.toHex8String();
+              this.colorMap.set(colorIdent, hexa);
+              style[name] = hexa;
+            }
+          }
+        }
+        combined.set(rangeIdent,{range, style:sA<sB?{...style, ...old.style}:{...old.style, ...style} , specificity:Math.max(sA,sB)});
       }
     }
     return [...combined.values()];

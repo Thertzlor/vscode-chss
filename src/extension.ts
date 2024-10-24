@@ -12,8 +12,7 @@ export async function activate(_context:vscode.ExtensionContext) {
   const wa = new TextDecoder().decode(cs);
   const wUri = vscode.workspace.workspaceFolders?.[0]?.uri;
   const parser = new HssParser(wUri);
-  const decorations = new Map<string,Map<vscode.Range,vscode.TextEditorDecorationType>>();
-  const decoTypes = new Map<string,vscode.TextEditorDecorationType>();
+  const decorations = new Map<string,Map<string,[vscode.TextEditorDecorationType,vscode.Range[]]>>();
 
   let rules = parser.parseHss(wa);
   const processEditor = async(editor = vscode.window.activeTextEditor,full=false) => {
@@ -22,9 +21,12 @@ export async function activate(_context:vscode.ExtensionContext) {
     const {uri} = textDocument;
     const uString = uri.toString();
     const decos = (decorations.has(uString)?decorations.get(uString):decorations.set(uString, new Map()).get(uString))!;
-    if (full) {
-      for (const decType of decos.values()) decType.dispose();
-      decos.clear();
+    for (const [k,[t,arr]] of decos.entries()) {
+      arr.length=0;
+      if (full){
+        t.dispose();
+        decos.delete(k);
+      }
     }
     const tokensData:vscode.SemanticTokens | undefined = await vscode.commands.executeCommand('vscode.provideDocumentSemanticTokens', uri);
     const legend:vscode.SemanticTokensLegend | undefined = await vscode.commands.executeCommand('vscode.provideDocumentSemanticTokensLegend', uri);
@@ -34,15 +36,18 @@ export async function activate(_context:vscode.ExtensionContext) {
     const ranges = rangesByName(tokensData,legend,editor);
     const hss = parser.processHss(ranges,rules,textDocument);
     for (const {style,range} of hss) {
-      for (const [key,deco] of decos.entries()) {
-        if (!range.intersection(key)) continue;
-        deco.dispose();
-        decos.delete(key);
+      const stryle = JSON.stringify(style);
+      if (decos.has(stryle)){
+        const doco = decos.get(stryle)!;
+        doco[1].push(range);
+      } else decos.set(stryle,[vscode.window.createTextEditorDecorationType(style),[range]]);
+    }
+    for (const [k,[style,rs]] of decos.entries()){
+      if (rs.length)editor.setDecorations(style, rs);
+      else {
+        style.dispose();
+        decos.delete(k);
       }
-      const deco = vscode.window.createTextEditorDecorationType(style);
-      console.log(deco.key);
-      decos.set(range,deco);
-      editor.setDecorations(deco,[range]);
     }
   };
   for (const e of vscode.window.visibleTextEditors) processEditor(e);
@@ -54,5 +59,5 @@ export async function activate(_context:vscode.ExtensionContext) {
     }
     else processEditor();
   });
-  vscode.window.onDidChangeActiveTextEditor(e => processEditor(e));
+  vscode.window.onDidChangeActiveTextEditor(e => processEditor(e,false));
 }
