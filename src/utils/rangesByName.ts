@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
  *  - at index `5*i`   - `deltaLine`: token line number, relative to the previous token
  *  - at index `5*i+1` - `deltaStart`: token start character, relative to the previous token (relative to 0 or the previous token's start if they are on the same line)
  *  - at index `5*i+2` - `length`: the length of the token. A token cannot be multiline.
- *  - at index `5*i+3` - `tokenType`: will be looked up in `SemanticTokensLegend.tokenTypes`. We currently ask that `tokenType` < 65536.
+ *  - at index `5*i+3` - `tokenType`: will be looked up in `SemanticTokensLegend.tokenTypes`. We currently ask that `tokenType` \< 65536.
  *  - at index `5*i+4` - `tokenModifiers`: each set bit will be looked up in `SemanticTokensLegend.tokenModifiers`
  *
  * ---
@@ -60,25 +60,25 @@ import * as vscode from 'vscode';
  * *NOTE*: When doing edits, it is possible that multiple edits occur until VS Code decides to invoke the semantic tokens provider.
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
-export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string}
-export function rangesByName(data: vscode.SemanticTokens, legend: vscode.SemanticTokensLegend, editor: vscode.TextEditor,all=false) {
-	const accumulator : Record<string, Set<TokenData>> = {};
-	const recordSize = 5;
-	let line = 0;
-	let column = 0;
-	for (let i = 0; i < data.data.length; i += recordSize) {
-		const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
-		const kind = legend.tokenTypes[kindIndex];
-		column = deltaLine === 0 ? column : 0;
-		line += deltaLine;
-		column += deltaColumn;
-		// if (!all && (!tokenKinds.has(kind))) continue; 
-		const modifierFlags = ['none'].concat(legend.tokenModifiers).reduce((a:Record<string,number>,c,i)=> (a[c]=(i-1>=2?(2 << (i-2)):i),a),{});
-		const modifiers = legend.tokenModifiers.filter(m=>modifierIndex & modifierFlags[m]);
-		const range = new vscode.Range(line, column, line, column + length);
-		const name = editor.document.getText(range);
-		if(!accumulator[kind])accumulator[kind]=new Set();
-		accumulator[kind].add({range,name,modifiers,type:kind});
-	}
-	return accumulator;
+export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string};
+export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
+  const accumulator:Record<string, Set<TokenData>|undefined> = {};
+  const recordSize = 5;
+  let line = 0;
+  let column = 0;
+  for (let i = 0; i < data.data.length; i += recordSize) {
+    const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
+    const kind = legend.tokenTypes[kindIndex];
+    column = deltaLine === 0 ? column : 0;
+    line += deltaLine;
+    column += deltaColumn;
+		// if (!all && (!tokenKinds.has(kind))) continue;
+    const modifierFlags = ['none', ...legend.tokenModifiers].reduce((a:Record<string,number>,c,n) => (a[c]=(n-1>=2?2 << (n-2):n),a),{});
+    const modifiers = legend.tokenModifiers.filter(m => modifierIndex & modifierFlags[m]);
+    const range = new vscode.Range(line, column, line, column + length);
+    const name = editor.document.getText(range);
+    if (!accumulator[kind])accumulator[kind]=new Set();
+    accumulator[kind].add({range,name,modifiers,type:kind});
+  }
+  return accumulator as Record<string, Set<TokenData>>;
 }
