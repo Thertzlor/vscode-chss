@@ -1,5 +1,6 @@
-import {type TokenData} from './rangesByName';
-import {Range ,languages, type TextDocument, RelativePattern, type Uri} from 'vscode';
+import {Range ,languages, RelativePattern} from 'vscode';
+import type {TextDocument, Uri} from 'vscode';
+import type {TokenData} from './rangesByName';
 import color from 'tinycolor2';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
@@ -66,11 +67,15 @@ export class HssParser{
     return {specificity:specificity+(10*splitMods.length), name, type,modifiers:splitMods};
   }
 
-  public parseHss(str:string){
+  /**
+   * A gnarly minimal parser for pseudo css.
+   * @param source -The source code of the file
+   */
+  public parseHss(source:string){
     const res = [] as HssRule[];
     let skipNext = false;
     let currentScope:string|undefined;
-    for (const [i,v] of str.replaceAll(/\/\/.*/g,'').replaceAll(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s => s.trim()).entries()) {
+    for (const [i,v] of source.replaceAll(/\/\/.*/g,'').replaceAll(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s => s.trim()).entries()) {
       const selector = (i + (currentScope?1:0)) % 2 === 0;
       if (currentScope && !v){currentScope = undefined; continue;}
       if (skipNext){skipNext = false; continue;}
