@@ -11,29 +11,6 @@
   "categories": [
     "Programming Languages"
   ],
-  "textmate-languageservice-contributes": {
-    "languages": [
-      {
-        "id": "typescript",
-        "aliases": [
-          "TypeScript"
-        ],
-        "extensions": [
-          ".ts",
-          ".tsx",
-          ".cts",
-          ".mts"
-        ]
-      }
-    ],
-    "grammars": [
-      {
-        "language": "typescript",
-        "scopeName": "source.ts",
-        "path": "./syntaxes/TypeScript.tmLanguage.json"
-      }
-    ]
-  },
   "keywords": [
     "semantic",
     "syntax",
@@ -46,10 +23,22 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "css": {
-      "customData": [
-        "./css.css-data.json"
-      ]
+    "configuration": {
+      "title": "HSS - Highlighting Style Sheets",
+      "properties": {
+        "hss.styleLocation": {
+          "type": "string",
+          "default": "*.hss",
+          "description": "path or glob pattern for your code stylesheet.",
+          "title": "Stylesheet Location"
+        },
+        "hss.realtimeHss": {
+          "type": "boolean",
+          "default": true,
+          "description": "Apply style updates in real-time while editing the .hss file.",
+          "title": "Immediate Stylesheet Updates"
+        }
+      }
     },
     "languages": [
       {

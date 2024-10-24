@@ -20,16 +20,16 @@ export class HssParser{
   private parseSelector(selector:string):ParsedSelector{
     const invalid = {specificity:0, name:'', type:'',modifiers:[]};
     if (selector === '*') return {specificity:1, name:'', type:'*',modifiers:[]};
-    if (/^\w+$/.test(selector)) return {specificity:50, name:selector, type:'*',modifiers:[]}; //simple variable: name
+    if (/^\w+$/.test(selector)) return {specificity:50, name:selector, type:'*',modifiers:[]}; // name selector for all types: name
     if (/^\w+$/.test(selector.slice(1))){
       const sliced = selector.charAt(0);
       switch (sliced) {
-      case '#': return {specificity:100, name:selector.slice(1), type:'variable',modifiers:[]}; //function: #name
-      case '.': return {specificity:100, name:selector.slice(1), type:'function',modifiers:[]}; //class: .name
+      case '#': return {specificity:100, name:selector.slice(1), type:'variable',modifiers:[]}; //variable: #name
+      case '.': return {specificity:100, name:selector.slice(1), type:'function',modifiers:[]}; //function: .name
       default: return invalid;
       }
     }
-    if (selector.startsWith('<') && selector.endsWith('>')){
+    if (selector.startsWith('<') && selector.endsWith('>')){ // Advanced match: <wildc*rd> | <^=textmatch> | <"/RegEx/"> | <^=match=type>
       const [operator,val,manualType] = selector.slice(1,-1).split('=').map(s => s.trim());
       const ops:Record<string,MatchType|undefined> = {'^':'startsWith','*':'includes',$:'endsWith'};
       const mType:MatchType = ops[operator] ?? 'match';
@@ -59,6 +59,7 @@ export class HssParser{
       return {specificity:11+(10*splitMods.length), name, type,modifiers:splitMods};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
+    // name with modifiers: variable:modifier
     const splitMods = selector.split(':');
     const ident = splitMods.shift();
     if (!ident) return invalid;

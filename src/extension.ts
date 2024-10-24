@@ -1,19 +1,34 @@
 import {workspace,window, TextEditorDecorationType,commands} from 'vscode';
-import type {Range, ExtensionContext, SemanticTokens, SemanticTokensLegend} from 'vscode';
+import type {Range, ExtensionContext, SemanticTokens, SemanticTokensLegend, Uri,ConfigurationChangeEvent} from 'vscode';
 import {rangesByName} from './utils/rangesByName';
 import {HssParser} from './utils/hssParser';
 import {TextDecoder} from 'util';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
-export async function activate(_context:ExtensionContext) {
+const getConfigGeneric = (section:string) => <T>(name:string):T => ((c=workspace.getConfiguration(section)) => c.get(name)??c.inspect(name)?.defaultValue as any)();
+
+export async function activate(context:ExtensionContext) {
     // const selector: vscode.DocumentSelector = 'custom';
     // const textmateService = new TextmateLanguageService('typescript', context);
     // const textmateTokenService = await textmateService.initTokenService();
-  const cs = await workspace.findFiles('*.hss').then(c => c[0] && workspace.fs.readFile(c[0]));
+  const getConfig = getConfigGeneric('hss');
+  const loadFile = async() => (await workspace.findFiles(getConfig<string>('styleLocation')))[0] as Uri|undefined;
+  let directUpdate = getConfig<boolean>('realtimeHss');
+  console.log(directUpdate);
+  let hssFile = await loadFile();
+  if (!hssFile) return;
+  const cs = await workspace.fs.readFile(hssFile);
   const wa = new TextDecoder().decode(cs);
   const wUri = workspace.workspaceFolders?.[0]?.uri;
   const parser = new HssParser(wUri);
   const decorations = new Map<string,Map<string,[TextEditorDecorationType,Range[]]>>();
+
+
+  async function onDidChangeConfiguration(e:ConfigurationChangeEvent) {
+    e.affectsConfiguration('hss.styleLocation') && (hssFile = await loadFile());
+    e.affectsConfiguration('hss.realtimeHss') && (directUpdate = getConfig('realtimeHss'));
+  }
+  context.subscriptions.push(workspace.onDidChangeConfiguration(onDidChangeConfiguration));
 
   let rules = parser.parseHss(wa);
   const processEditor = async(editor = window.activeTextEditor,full=false) => {
@@ -54,11 +69,12 @@ export async function activate(_context:ExtensionContext) {
   for (const e of window.visibleTextEditors) processEditor(e);
   workspace.onDidChangeTextDocument(e => {
     if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
-    if (e.document.fileName.endsWith('.hss')) {
+    if (e.document.uri.toString() === hssFile?.toString() && (directUpdate || !e.document.isDirty)) {
       rules = parser.parseHss(e.document.getText());
       for (const ed of window.visibleTextEditors) processEditor(ed,true);
     }
     else processEditor();
   });
-  window.onDidChangeActiveTextEditor(e => processEditor(e,false));
+  window.onDidChangeActiveTextEditor(e => processEditor(e));
+
 }
