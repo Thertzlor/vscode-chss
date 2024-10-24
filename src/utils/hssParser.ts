@@ -7,7 +7,7 @@ interface ParsedSelector {type:string, specificity:number, name:string, modifier
 interface HssRule {selector:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
 interface ProtoHssMatch {range:Range, style:Record<string,string>, specificity:number,colorActions?:Map<string,[ColorAction,string]>}
 type HssMatch = Omit<ProtoHssMatch,'colorActions'>;
-const colorMods = ['lighten','brighten','darken','desaturate','saturate','greyscale','spin'] as const;
+const colorMods = ['lighten','brighten','darken','desaturate','saturate','greyscale','spin','random'] as const;
 type ColorAction = typeof colorMods[number];
 
 export class HssParser{
@@ -141,6 +141,10 @@ export class HssParser{
         const [sA, sB] = [current,old].map(s => s.specificity);
         if ((sA>=sB) && colorActions){
           for (const [name,[action,args]] of colorActions.entries()) {
+            if (action === 'random') {
+              style[name] = color.random().toHex8String();
+              continue;
+            }
             if (!(name in old.style)) continue;
             const colorIdent = [old.style[name],action,args].join('-');
             if (this.colorMap.has(colorIdent)) {
@@ -149,7 +153,7 @@ export class HssParser{
             }
             const oldCol = color(old.style[name]);
             if (!oldCol.isValid()) continue;
-            const newCol = oldCol[action](parseInt(args,10));
+            const newCol = oldCol[action](args?parseInt(args,10):undefined as never);
             if (newCol.isValid()) {
               const hexa =newCol.toHex8String();
               this.colorMap.set(colorIdent, hexa);
