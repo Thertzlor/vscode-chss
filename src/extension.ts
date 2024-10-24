@@ -6,7 +6,6 @@ import {TextDecoder} from 'util';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
 const getConfigGeneric = (section:string) => <T>(name:string):T => ((c=workspace.getConfiguration(section)) => c.get(name)??c.inspect(name)?.defaultValue as any)();
-
 export async function activate(context:ExtensionContext) {
     // const selector: vscode.DocumentSelector = 'custom';
     // const textmateService = new TextmateLanguageService('typescript', context);
@@ -17,12 +16,9 @@ export async function activate(context:ExtensionContext) {
   console.log(directUpdate);
   let hssFile = await loadFile();
   if (!hssFile) return;
-  const cs = await workspace.fs.readFile(hssFile);
-  const wa = new TextDecoder().decode(cs);
-  const wUri = workspace.workspaceFolders?.[0]?.uri;
-  const parser = new HssParser(wUri);
+  const hssText = new TextDecoder().decode(await workspace.fs.readFile(hssFile));
+  const parser = new HssParser(workspace.workspaceFolders?.[0]?.uri);
   const decorations = new Map<string,Map<string,[TextEditorDecorationType,Range[]]>>();
-
 
   async function onDidChangeConfiguration(e:ConfigurationChangeEvent) {
     e.affectsConfiguration('hss.styleLocation') && (hssFile = await loadFile());
@@ -30,7 +26,7 @@ export async function activate(context:ExtensionContext) {
   }
   context.subscriptions.push(workspace.onDidChangeConfiguration(onDidChangeConfiguration));
 
-  let rules = parser.parseHss(wa);
+  let rules = parser.parseHss(hssText);
   const processEditor = async(editor = window.activeTextEditor,full=false) => {
     if (!editor) return;
     const textDocument = editor.document;
@@ -67,6 +63,7 @@ export async function activate(context:ExtensionContext) {
     }
   };
   for (const e of window.visibleTextEditors) processEditor(e);
+  window.onDidChangeActiveTextEditor(e => processEditor(e));
   workspace.onDidChangeTextDocument(e => {
     if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
     if (e.document.uri.toString() === hssFile?.toString() && (directUpdate || !e.document.isDirty)) {
@@ -75,6 +72,4 @@ export async function activate(context:ExtensionContext) {
     }
     else processEditor();
   });
-  window.onDidChangeActiveTextEditor(e => processEditor(e));
-
 }
