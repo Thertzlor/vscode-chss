@@ -11,19 +11,14 @@ export async function activate(context:ExtensionContext) {
     // const textmateService = new TextmateLanguageService('typescript', context);
     // const textmateTokenService = await textmateService.initTokenService();
   const getConfig = getConfigGeneric('chss');
-  const loadFile = async() => (await workspace.findFiles(getConfig<string>('styleLocation')))[0] as Uri|undefined;
-  let directUpdate = getConfig<boolean>('realtimeChss');
+  const loadFile = async() => (await workspace.findFiles(getConfig<string>('stylesheetLocation')))[0] as Uri|undefined;
+  let directUpdate = getConfig<boolean>('realtimeCHSS');
+  let insen = getConfig<boolean>('caseInsensitive');
   let chssFile = await loadFile();
   if (!chssFile) return;
   const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile));
   const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
   const decorations = new Map<string,Map<string,[TextEditorDecorationType,Range[]]>>();
-
-  async function onDidChangeConfiguration(e:ConfigurationChangeEvent) {
-    e.affectsConfiguration('chss.styleLocation') && (chssFile = await loadFile());
-    e.affectsConfiguration('chss.realtimeChss') && (directUpdate = getConfig('realtimeChss'));
-  }
-  context.subscriptions.push(workspace.onDidChangeConfiguration(onDidChangeConfiguration));
 
   let rules = parser.parseChss(chssText);
   const processEditor = async(editor = window.activeTextEditor,full=false) => {
@@ -45,7 +40,7 @@ export async function activate(context:ExtensionContext) {
         // const tokens = await textmateTokenService.fetch(textDocument);
     // console.log(await commands.executeCommand('vscode.executeDocumentSymbolProvider',window.activeTextEditor?.document.uri));
     const ranges = rangesByName(tokensData,legend,editor);
-    const chss = parser.processChss(ranges,rules,textDocument);
+    const chss = parser.processChss(ranges,rules,textDocument,insen);
     for (const {style,range,pseudo} of chss) {
       const stryle = JSON.stringify(style);
       if (decos.has(stryle)){
@@ -61,14 +56,23 @@ export async function activate(context:ExtensionContext) {
       }
     }
   };
-  for (const e of window.visibleTextEditors) processEditor(e);
+  const processAll = () => {for (const e of window.visibleTextEditors) processEditor(e,true);};
+  processAll();
   window.onDidChangeActiveTextEditor(e => processEditor(e));
   workspace.onDidChangeTextDocument(e => {
     if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
     if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
       rules = parser.parseChss(e.document.getText());
-      for (const ed of window.visibleTextEditors) processEditor(ed,true);
+      processAll();
     }
     else processEditor();
   });
+  async function onDidChangeConfiguration(e:ConfigurationChangeEvent) {
+    let reProcess = false;
+    e.affectsConfiguration('chss.realtimeCHSS') && (directUpdate = getConfig('realtimeCHSS'));
+    if (e.affectsConfiguration('chss.stylesheetLocation')) {chssFile = await loadFile(); reProcess = true;}
+    if (e.affectsConfiguration('chss.caseInsensitiveMatch')) {insen = getConfig('caseInsensitiveMatch'); reProcess = true;}
+    reProcess && processAll();
+  }
+  context.subscriptions.push(workspace.onDidChangeConfiguration(onDidChangeConfiguration));
 }

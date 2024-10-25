@@ -26,17 +26,20 @@
     "configuration": {
       "title": "CHSS Code Highlighting Style Sheets",
       "properties": {
-        "chss.styleLocation": {
+        "chss.stylesheetLocation": {
           "type": "string",
           "default": "*.chss",
-          "description": "path or glob pattern for your code stylesheet.",
-          "title": "Stylesheet Location"
+          "description": "Path or glob pattern for your code stylesheet."
         },
-        "chss.realtimeChss": {
+        "chss.realtimeCHSS": {
           "type": "boolean",
           "default": true,
-          "description": "Apply style updates in real-time while editing the .chss file.",
-          "title": "Immediate Stylesheet Updates"
+          "description": "Apply style updates in real-time while editing the .chss file."
+        },
+        "chss.caseInsensitiveMatch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Case insensitive name matching"
         }
       }
     },
@@ -46,13 +49,6 @@
         "extensions": [
           ".chss"
         ]
-      }
-    ],
-    "themes": [
-      {
-        "label": "No color Dark",
-        "uiTheme": "vs-dark",
-        "path": "./themes/no-color-dark-color-theme.json"
       }
     ],
     "semanticTokenScopes": [
