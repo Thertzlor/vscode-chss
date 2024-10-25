@@ -24,7 +24,7 @@ export class ChssParser{
     const selector = pseudo?rawSelector.replaceAll(`::${pseudo}`, ''):rawSelector;
     if (selector === '*') return {specificity:1, name:'', type:'*',modifiers:[],pseudo};
     if (/^\w+$/.test(selector)) return {specificity:50, name:selector, type:'*',modifiers:[],pseudo}; // name selector for all types: name
-    if (/^\w+$/.test(selector.slice(1))){
+    if (/^\w+$/.test(selector.slice(1)) && !selector.startsWith(':')){
       const sliced = selector.charAt(0);
       switch (sliced) {
       case '#': return {specificity:100, name:selector.slice(1), type:'variable',modifiers:[],pseudo}; //variable: #name
@@ -44,22 +44,17 @@ export class ChssParser{
       let manualType = rawType;
       if (rawType) manualType = rawType.includes(':') ? ((c = rawType.indexOf(':')) => `[${rawType.slice(0,c)}]${rawType.slice(c)}`)() : `[${rawType}]`;
       const {type='*',modifiers=[]} = rawType? this.parseSelector(manualType):{};
-      console.log({type,modifiers,manualType});
       return {specificity:matchSpecs[mType], name:value, type,modifiers,regexp,match:mType,pseudo};
     }
     if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:2, name:'', type:selector.slice(1,-1),modifiers:[],pseudo}; // general type: [variable]
     if (selector.startsWith('[')){ // extended type with one or more modifiers: [variable]:readonly
-      const modifiers = selector.split(':');
-      const sel = modifiers.shift() ?? '';
+      const [sel='',...modifiers] = selector.split(':');
       if (!modifiers.length || !sel.endsWith(']')) return invalid;
       return {specificity:10+(modifiers.length*10), name:'', type:sel.slice(1,-1),modifiers,pseudo};
     }
     if (selector.includes('[') && selector.includes(']')){ //compound: name[variable]:readonly
       if (!/\w/.test(selector.charAt(0))) return invalid;//eslint-disable-next-line unicorn/better-regex
-      const splitUp = selector.split(/\[|\]/gm);
-      const name = splitUp.shift()!;
-      const type = splitUp.shift();
-      const mods = splitUp.shift();
+      const [name,type,mods] = selector.split(/\[|\]/gm);
       if (!type) return invalid;
       if (!mods) return {specificity:11, name, type,modifiers:[]};
       const splitMods = mods.split(':');
@@ -67,9 +62,8 @@ export class ChssParser{
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
     // name with modifiers: variable:modifier
-    const splitMods = selector.split(':');
-    const ident = splitMods.shift();
-    if (!ident) return invalid;
+    const [ident, ...splitMods] = selector.split(':');
+    if (!ident) return splitMods.length? {specificity:2*splitMods.length, name:'', type:'*',modifiers:splitMods,pseudo}:invalid;
     const {specificity,name,type} = this.parseSelector(ident);
     if (specificity === 0) return invalid;
     return {specificity:specificity+(10*splitMods.length), name, type,modifiers:splitMods,pseudo};

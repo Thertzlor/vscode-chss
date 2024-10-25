@@ -47,7 +47,6 @@ export async function activate(context:ExtensionContext) {
     const ranges = rangesByName(tokensData,legend,editor);
     const chss = parser.processChss(ranges,rules,textDocument);
     for (const {style,range,pseudo} of chss) {
-      if (pseudo)console.log({pseudo,style});
       const stryle = JSON.stringify(style);
       if (decos.has(stryle)){
         const doco = decos.get(stryle)!;
