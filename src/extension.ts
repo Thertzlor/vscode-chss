@@ -43,15 +43,16 @@ export async function activate(context:ExtensionContext) {
     const legend:SemanticTokensLegend | undefined = await commands.executeCommand('vscode.provideDocumentSemanticTokensLegend', uri);
     if (!tokensData || !legend) return;
         // const tokens = await textmateTokenService.fetch(textDocument);
-    console.log(await commands.executeCommand('vscode.executeDocumentSymbolProvider',window.activeTextEditor?.document.uri));
+    // console.log(await commands.executeCommand('vscode.executeDocumentSymbolProvider',window.activeTextEditor?.document.uri));
     const ranges = rangesByName(tokensData,legend,editor);
     const chss = parser.processChss(ranges,rules,textDocument);
-    for (const {style,range} of chss) {
+    for (const {style,range,pseudo} of chss) {
+      if (pseudo)console.log({pseudo,style});
       const stryle = JSON.stringify(style);
       if (decos.has(stryle)){
         const doco = decos.get(stryle)!;
         doco[1].push(range);
-      } else decos.set(stryle,[window.createTextEditorDecorationType(style),[range]]);
+      } else decos.set(stryle,[window.createTextEditorDecorationType(pseudo?{[pseudo]:style}:style),[range]]);
     }
     for (const [k,[style,rs]] of decos.entries()){
       if (rs.length)editor.setDecorations(style, rs);
