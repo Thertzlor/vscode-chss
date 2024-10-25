@@ -1,4 +1,5 @@
 # CHSS: Code Highlighting Stylesheets
+![Example Full](img/chss_logo_medium.png)
 
 Is the syntax highlighting with regular VSCode themes not detailed enough?  
 Did you ever wish you could use CSS to style your code yourself and assign colors and decorations to variables or functions with specific names?  
