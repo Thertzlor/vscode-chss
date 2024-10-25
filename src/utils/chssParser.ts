@@ -33,15 +33,18 @@ export class ChssParser{
       }
     }
     if (selector.startsWith('<') && selector.endsWith('>')){ // Advanced match: <wildc*rd> | <^=textmatch> | <"/RegEx/"> | <^=match=type>
-      const [operator,val,manualType] = selector.slice(1,-1).split('=').map(s => s.trim());
+      const [operator,val,rawType] = selector.slice(1,-1).split('=').map(s => s.trim());
       const ops:Record<string,MatchType|undefined> = {'^':'startsWith','*':'includes',$:'endsWith'};
       const mType:MatchType = ops[operator] ?? 'match';
       const matchSpecs = {match:40,startsWith:30,endsWith:30,includes:20};
       const value = val || operator;
       if (mType === 'match' && !value.includes('*') && !/^"\/.+\/i?"$/.test(value)) return invalid;
       const insense = value.slice(0,-1).endsWith('/i');
-      const regexp=mType === 'match'?new RegExp(value.startsWith('"') && value.endsWith('"')?value.slice(2,insense?-3:-2):value.replace('*','.*'),insense && value.startsWith('"')?'i':undefined):undefined;
-      const {type='*',modifiers=[]} = manualType? this.parseSelector(manualType):{};
+      const regexp=mType === 'match'?new RegExp(value.startsWith('"') && value.endsWith('"')?value.slice(2,insense?-3:-2):`^${value.replace('*','.*')}$`,insense && value.startsWith('"')?'i':undefined):undefined;
+      let manualType = rawType;
+      if (rawType) manualType = rawType.includes(':') ? ((c = rawType.indexOf(':')) => `[${rawType.slice(0,c)}]${rawType.slice(c)}`)() : `[${rawType}]`;
+      const {type='*',modifiers=[]} = rawType? this.parseSelector(manualType):{};
+      console.log({type,modifiers,manualType});
       return {specificity:matchSpecs[mType], name:value, type,modifiers,regexp,match:mType,pseudo};
     }
     if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:2, name:'', type:selector.slice(1,-1),modifiers:[],pseudo}; // general type: [variable]
