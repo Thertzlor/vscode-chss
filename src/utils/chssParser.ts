@@ -103,13 +103,14 @@ export class ChssParser{
         const ruleObj = {} as Record<string,string>;
         const cMap= new Map<string,[ColorAction,string]>();
         for (const r of rules) {
-          const [name,value] = r.split(':').map(s => s.trim());
+          const [_,name,value] = [...r.match(/^([^:]+):(.*)$/) ?? [void 0]].map(s => s?.trim());
           if (name && value) {
+            const unquoted = value.startsWith('"') && value.endsWith('"')?value.slice(1,-1):value;
             if (colorMods.some(m => value.startsWith(`${m}(`))){
               const [mode,arg] = value.split(/\(|\)/gm).map(s => s.trim());
               cMap.set(name,[mode as ColorAction,arg]);
             }
-            else ruleObj[name.replaceAll(/-(\w)/gm,a => a[1].toUpperCase())]=value;}
+            else ruleObj[name.replaceAll(/-(\w)/gm,a => a[1].toUpperCase())]=unquoted;}
         }
         const cuRule = res.at(-1);
         if (cuRule){
