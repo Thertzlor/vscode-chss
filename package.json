@@ -1,8 +1,9 @@
 {
   "name": "vscode-chss",
   "displayName": "CHSS: Code Highlighting Style Sheets",
-  "description": "Real time semantic theming with css-like style",
-  "version": "0.0.9",
+  "description": "CSS-esque code styling in real-time",
+  "version": "0.2.0",
+  "repository": "https://github.com/Thertzlor/vscode-chss",
   "license": "GPL-3.0-or-later",
   "publisher": "thertzlor",
   "engines": {
