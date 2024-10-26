@@ -1,5 +1,5 @@
-<p align="center">
-		<img responsive-image src="img/chss_logo_medium.png" />
+<p  align="center">
+		<img width="30%" responsive-image src="img/chss_logo_big.png" />
 </p>
 
 # CHSS: Code Highlighting Stylesheets
