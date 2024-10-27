@@ -6,3 +6,4 @@ node_modules/**
 tsconfig.json
 .gitignore
 eslint.config.mjs
+esbuild.js

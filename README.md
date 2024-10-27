@@ -10,6 +10,15 @@ What if you could do this on a per-project basis in real-time?
 
 Well, now you can. The CHSS extension hijacks VSCode's semantic highlighting to 
 
+
+
+## Installation
+After installing the extension, simply create a file with the `.chss` extension in the root directory of any project and you're ready to go.  
+The location of the file and some other behavior can be changed in the [extension's settings]()
+## Compatibility
+The decorations defined by this extension will override color and formatting provided by regular vscode themes. Personally, I recommend running this extension "on top" of a minimal, muted color theme for extra contrast with manually defined styles.  
+
+As mentioned, CHSS works on semantic tokens provided by another language servers, so make sure your project is in a language that has a semantic highlighting capable syntax highlighting extension installed.
 ##  The CHSS Syntax
 CHSS is basically vague bastardization of (S)CSS and .chss files use the highlighting for scss.  
 This works out because style rules are internally converterted into [DecorationRenderOptions](https://code.visualstudio.com/api/references/vscode-api#DecorationRenderOptions) and most of the properties are css rules already.  
@@ -55,6 +64,12 @@ This works out because style rules are internally converterted into [DecorationR
 
 A detailed description 
 
+### color transformations (using Tinycolor)
+(this functionality is "inspired" by my previosu extension [Semantic Rainbow]())
+If you have worked with the css `filter` property this is basically how this works, except arguably more powerful because here you can control different color properties like background, text, border-color, etc separately.
+
+
+
 >**Note:** There is as of yet no concept of relations between tokens, so features like sibling and descendant selectors in CSS, for use cases like "select variables in a class named x" or "select a variable x defined right after class y" are not possible. [For this we would need to parse an actual AST, too much work for now]
 
 ### Basic Selectors
@@ -96,3 +111,14 @@ scope("**\*.js"){
 }
 
 ```
+
+## Extension Settings
+This extension has the following settings:
+
+*  `chss.stylesheetLocation`:Path or glob pattern for your code stylesheet.
+*  `chss.realtimeCHSS`:Apply style updates in real-time while editing the .chss file. Disable to only apply styles to the project once the .chss file is saved.
+*  `chss.caseInsensitiveMatch`:Enable to make normal selectors such as `name` and `[*=name]` also match tokens named `Name` and `myName` respectively. Regex matches are not affected and still rely on the /i flag.
+
+## Roadmap
+
+## Credits
