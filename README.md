@@ -10,7 +10,9 @@ What if you could do this on a per-project basis in real-time?
 
 Well, now you can. The CHSS extension hijacks VSCode's semantic highlighting to 
 
-
+<p  align="center">
+		<img width="80%" src="img/chss_demo_cropped.gif" />
+</p>
 
 ## Installation
 After installing the extension, simply create a file with the `.chss` extension in the root directory of any project and you're ready to go.  
