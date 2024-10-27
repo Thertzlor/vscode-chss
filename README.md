@@ -11,7 +11,7 @@ What if you could do this on a per-project basis in real-time?
 Well, now you can. The CHSS extension hijacks VSCode's semantic highlighting to 
 
 <p  align="center">
-		<img width="80%" src="img/chss_demo_cropped.gif" />
+		<img width="80%" src="img/chss_demo.gif" />
 </p>
 
 ## Installation
