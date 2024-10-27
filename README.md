@@ -6,43 +6,54 @@
 
 Is the syntax highlighting with regular VSCode themes not detailed enough?  
 Did you ever wish you could use CSS to style your code yourself and assign colors and decorations to variables or functions with specific names?  
-What if you could style your code on a per-project basis in real-time?
+What if you could do this on a per-project basis in real-time?
 
-CHSS hijacks VSCode's semantic highlighting to 
+Well, now you can. The CHSS extension hijacks VSCode's semantic highlighting to 
 
 ##  The CHSS Syntax
 CHSS is basically vague bastardization of (S)CSS and .chss files use the highlighting for scss.  
-This works out because style rules are internally converterted into [DecorationRenderOptions](https://code.visualstudio.com/api/references/vscode-api#DecorationRenderOptions) and most of the properties are css rules already.
+This works out because style rules are internally converterted into [DecorationRenderOptions](https://code.visualstudio.com/api/references/vscode-api#DecorationRenderOptions) and most of the properties are css rules already.  
+
+```scss
+//CHSS supports single line comments.
+
+
+  #window{
+    color:red
+  }
+  
+
+```
 
 ### Available CHSS Properties
 
 >**Note:** All properties can be specified both in CSS style (`background-color`) and JS style (`backgroundColor`)
 
-* color
-* opacity
-* backgroundColor
-* fontStyle
-* fontWeight
-* textDecoration
-* letterSpacing
-* cursor
-* border
-* borderColor
-* borderRadius
-* borderSpacing
-* borderStyle
-* borderWidth
-* outline
-* outlineColor
-* outlineStyle
-* outlineWidth
-* gutterIconPath
-* gutterIconSize
-* isWholeLine
-* overviewRulerLane
-* overviewRulerColor
+* **color**
+* **opacity**
+* **backgroundColor**
+* **fontStyle**
+* **fontWeight**
+* **textDecoration**
+* **letterSpacing**
+* **cursor**
+* **border**
+* **borderColor**
+* **borderRadius**
+* **borderSpacing**
+* **borderStyle**
+* **borderWidth**
+* **outline**
+* **outlineColor**
+* **outlineStyle**
+* **outlineWidth**
+* **gutterIconPath**
+* **gutterIconSize**
+* **isWholeLine**
+* **overviewRulerLane**
+* **overviewRulerColor**
 
-A detailed descr
+A detailed description 
 
 >**Note:** There is as of yet no concept of relations between tokens, so features like sibling and descendant selectors in CSS, for use cases like "select variables in a class named x" or "select a variable x defined right after class y" are not possible. [For this we would need to parse an actual AST, too much work for now]
 

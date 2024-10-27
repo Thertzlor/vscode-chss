@@ -1,0 +1,8 @@
+src/**
+img/chss_logo_big.png
+out/*
+node_modules/**
+.vscode/**
+tsconfig.json
+.gitignore
+eslint.config.mjs
