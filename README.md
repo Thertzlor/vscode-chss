@@ -8,15 +8,13 @@ Is the syntax highlighting with regular VSCode themes not detailed enough?
 Did you ever wish you could use CSS to style your code yourself and assign colors and decorations to variables or functions with specific names?  
 What if you could do this on a per-project basis in real-time?
 
-Well, now you can. The CHSS extension hijacks VSCode's semantic highlighting to 
+Now you can. The *CHSS* extension hijacks VSCode's semantic highlighting to give you complete control over any semantic elements in your code.
 
-<p  align="center">
-		<img width="80%" src="img/chss_demo.gif" />
-</p>
+<p  align="center"><img width="80%" src="https://raw.githubusercontent.com/Thertzlor/vscode-chss/refs/heads/main/img/chss_demo.gif" /></p>
 
 ## Installation
 After installing the extension, simply create a file with the `.chss` extension in the root directory of any project and you're ready to go.  
-The location of the file and some other behavior can be changed in the [extension's settings]()
+The location of the file and some other behavior can be changed in the [extension's settings](#extension-settings)
 ## Compatibility
 The decorations defined by this extension will override color and formatting provided by regular vscode themes. Personally, I recommend running this extension "on top" of a minimal, muted color theme for extra contrast with manually defined styles.  
 

@@ -1,5 +1,6 @@
 src/**
 img/chss_logo_big.png
+img/chss_demo.gif
 out/*
 node_modules/**
 .vscode/**
