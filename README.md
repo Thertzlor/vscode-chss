@@ -1,8 +1,9 @@
 <p  align="center">
-		<img width="30%" responsive-image src="https://raw.githubusercontent.com/Thertzlor/vscode-chss/refs/heads/main/img/chss_icon_512.png" />
+		<img width="30%" src="https://raw.githubusercontent.com/Thertzlor/vscode-chss/refs/heads/main/img/chss_icon_512.png" />
 </p>
 
 # CHSS: Code Highlighting Stylesheets
+![License](https://img.shields.io/github/license/thertzlor/vscode-chss)
 
 Is the syntax highlighting with regular VSCode themes not detailed enough?  
 Did you ever wish you could use CSS to style your code yourself and assign colors and decorations to variables or functions with specific names?  
@@ -14,7 +15,7 @@ Now you can. The *CHSS* extension hijacks VSCode's semantic highlighting to give
 
 ## Installation
 After installing the extension, simply create a file with the `.chss` extension in the root directory of any project and you're ready to go.  
-The location of the file and some other behavior can be changed in the [extension's settings](#extension-settings)
+The location of the file and some other behavior can be changed in the [extension's settings](#extension-settings).
 ## Compatibility
 The decorations defined by this extension will be put on top of any colors and formatting provided by regular vscode themes. Personally, I recommend running this extension "on top" of a minimal, muted color theme for extra contrast with manually defined styles.  
 
@@ -173,14 +174,15 @@ This extension has the following settings:
 *  `chss.realtimeCHSS`:Apply style updates in real-time while editing the .chss file. Disable to only apply styles to the project once the .chss file is saved.
 *  `chss.caseInsensitiveMatch`:Enable to make normal selectors such as `name` and `[*=name]` also match tokens named `Name` and `myName` respectively. Regex matches are however still controlled with the /i flag.
 
-## Roadmap
+## Planned Features & Roadmap
 
 * Brainstorming some very silly ideas about converting an AST to a DOM and running actual CSS selectors on it for proper positional selectors. This is going to be very inefficient. 
-* :not() pseudo class would be neat.
+* `:not()` pseudo class would be neat.
+* `::light` and `::dark` pseudo classes to style for light and dark themes.
 * There used to be a fairly popular extension called [Apc Customize UI++](https://github.com/drcika/apc-extension) for injecting custom CSS which is unfortunately not working in recent VSCode versions. If it gets fixed, or another real-time CSS injector really takes off, it would be maybe possible to unlock the full power of CSS for CHSS.
-* *Maybe* adding support for selecting textmate scopes, (but VSCode also might pivot to Tree-Sitter as an LSP fallback, so who knows). This is also going to be inefficient if it ever happens.
+* *Maybe* adding support for selecting textmate scopes, (but VSCode also might pivot to Tree-Sitter as the language server fallback, so who knows). This is also going to be inefficient if it ever happens.
 
 ## Credits
-* [Kevin Ghadyani](https://github.com/Sawtaytoes) and [Valerij Primachenko](https://github.com/vprimachenko) for their semantic coloring implementations in [ColorMate](https://github.com/Sawtaytoes/vscode-colormate) and [Colorcoder](https://github.com/vprimachenko/Sublime-Colorcoder) and the general concept of name based highlighting that I am taking way too far right now.
+* [Kevin Ghadyani](https://github.com/Sawtaytoes) and [Valerij Primachenko](https://github.com/vprimachenko) for their semantic coloring implementations in [ColorMate](https://github.com/Sawtaytoes/vscode-colormate) and [Colorcoder](https://github.com/vprimachenko/Sublime-Colorcoder) and the general concept of name based highlighting that I am taking way too far with this.
 * [TinyColor](https://github.com/bgrins/TinyColor) for their neat color transformations.
 * CHSS logo adapted from the official CSS3 logo (even though there's nothing official about this extension and the W3C would probably hate it).

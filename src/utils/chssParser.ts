@@ -143,7 +143,6 @@ export class ChssParser{
         const targetType = parsed.type;
         if (!(targetType in rangeObject) && targetType !== '*') continue;
         for (const {name,range,modifiers} of targetType === '*'?Object.keys(rangeObject).flatMap(k => [...rangeObject[k]]):rangeObject[targetType]) {
-          // console.log({parsed,matched : parsed.match && this.matchName(name,parsed.match, parsed.name,parsed.regexp)})
           const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
           if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(m => !modifiers.includes(m))) matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity});
         }
