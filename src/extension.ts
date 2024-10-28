@@ -6,7 +6,7 @@ import {TextDecoder} from 'util';
 import {isAbsolute} from 'path';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
-const getConfigGeneric = <O extends Record<string,any>>(section:string) => <K extends Extract<keyof O,string>>(name:K) => ((c=workspace.getConfiguration(section)) => (c.get(name)??c.inspect(name)?.defaultValue) as O[K])();
+const getConfigGeneric = <O extends Record<string,unknown>>(section:string) => <K extends Extract<keyof O,string>>(name:K) => ((c=workspace.getConfiguration(section)) => (c.get(name)??c.inspect(name)?.defaultValue) as O[K])();
 export async function activate(context:ExtensionContext) {
   // const selector: vscode.DocumentSelector = 'custom';
   // const textmateService = new TextmateLanguageService('typescript', context);
