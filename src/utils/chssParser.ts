@@ -41,7 +41,8 @@ export class ChssParser{
       }
     }
     if (selector.startsWith('<') && selector.endsWith('>')){ // Advanced match: <wildc*rd> | <^=textmatch> | <"/RegEx/"> | <^=match=type>
-      const [operator,val,rawType] = selector.slice(1,-1).split('=').map(s => s.trim());
+      const [operator,val,rawType] = selector.slice(1,-1).split('=').map(s => ((t=s.trim()) => (t.startsWith('"') && t.endsWith('"')?t.slice(1,-1):t))());
+      //console.log({operator,val});
       const ops:Record<string,MatchType|undefined> = {'^':'startsWith','*':'includes',$:'endsWith'};
       const mType:MatchType = ops[operator] ?? 'match';
       const matchSpecs = {match:4,startsWith:3,endsWith:3,includes:2};
