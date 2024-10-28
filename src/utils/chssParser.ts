@@ -6,11 +6,12 @@ import color from 'tinycolor2';
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 interface ParsedSelector {type:string, specificity:Specifity, name:string, modifiers:string[], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
 interface ChssRule {selector:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
-interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:'before'|'after', specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>}
+interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>}
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
+const pseudos = ['before', 'after', 'light', 'dark'] as const;
+type Pseudo = typeof pseudos[number];
 type ColorAction = typeof colorMods[number];
-type Pseudo = 'before'|'after';
 type Specifity = [_id:number,_class:number,_type:number];
 
 export class ChssParser{
@@ -28,7 +29,7 @@ export class ChssParser{
 
   private parseSelector(rawSelector:string,base=0):ParsedSelector{
     const invalid = {specificity:[-1,-1,-1] as Specifity, name:'', type:'',modifiers:[]};
-    const pseudo = (['before','after'] as const).find(b => rawSelector.includes(`::${b}`));
+    const pseudo = pseudos.find(b => rawSelector.includes(`::${b}`));
     const selector = pseudo?rawSelector.replaceAll(`::${pseudo}`, ''):rawSelector;
     if (selector === '*') return {specificity:[base,0,0], name:'', type:'*',modifiers:[],pseudo};
     if (/^\w+$/.test(selector)) return {specificity:[base+1,0,0], name:selector, type:'*',modifiers:[],pseudo}; // name selector for all types: name
