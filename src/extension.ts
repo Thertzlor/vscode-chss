@@ -6,15 +6,15 @@ import {TextDecoder} from 'util';
 import {isAbsolute} from 'path';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
-const getConfigGeneric = (section:string) => <T>(name:string):T => ((c=workspace.getConfiguration(section)) => c.get(name)??c.inspect(name)?.defaultValue as any)();
+const getConfigGeneric = <O extends Record<string,any>>(section:string) => <K extends Extract<keyof O,string>>(name:K):O[K] => ((c=workspace.getConfiguration(section)) => c.get(name)??c.inspect(name)?.defaultValue as any)();
 export async function activate(context:ExtensionContext) {
   // const selector: vscode.DocumentSelector = 'custom';
   // const textmateService = new TextmateLanguageService('typescript', context);
   // const textmateTokenService = await textmateService.initTokenService();
-  const getConfig = getConfigGeneric('chss');
-  const loadFile = async(p=getConfig<string>('stylesheetLocation')) => (p?isAbsolute(p)? Uri.file(p) : (await workspace.findFiles(p))[0] as Uri|undefined:undefined);
-  let directUpdate = getConfig<boolean>('realtimeCHSS');
-  let insen = getConfig<boolean>('caseInsensitive');
+  const getConfig = getConfigGeneric<{realtimeCHSS:boolean,stylesheetLocation:string,fullCss:boolean,caseInsensitiveMatch:boolean}>('chss');
+  const loadFile = async(p=getConfig('stylesheetLocation')) => (p?isAbsolute(p)? Uri.file(p) : (await workspace.findFiles(p))[0] as Uri|undefined:undefined);
+  let directUpdate = getConfig('realtimeCHSS');
+  let insen = getConfig('caseInsensitiveMatch');
   let chssFile = await loadFile();
   const main = async() => {
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
