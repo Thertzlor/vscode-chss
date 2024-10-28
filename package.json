@@ -2,22 +2,27 @@
   "name": "vscode-chss",
   "displayName": "CHSS: Code Highlighting Style Sheets",
   "description": "CSS-esque code styling in real-time",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "repository": "https://github.com/Thertzlor/vscode-chss",
   "license": "GPL-3.0-or-later",
   "publisher": "thertzlor",
   "engines": {
     "vscode": "^1.92.0"
   },
+  "author": {
+    "name": "Thertzlor"
+  },
+  "icon": "img/chss_icon_256.png",
   "categories": [
-    "Programming Languages"
+    "Themes",
+    "Other"
   ],
   "keywords": [
     "semantic",
     "syntax",
     "highlighting",
-    "variables",
-    "architect"
+    "css",
+    "customization"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -212,7 +217,6 @@
   "dependencies": {
     "tinycolor2": "^1.6.0",
     "typescript": "^5.6.3",
-    "vscode-chss": "file:",
     "vscode-textmate-languageservice": "^3.0.1"
   }
 }
