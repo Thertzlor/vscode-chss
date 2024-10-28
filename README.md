@@ -3,7 +3,7 @@
 </p>
 
 # CHSS: Code Highlighting Stylesheets
-![License](https://img.shields.io/github/license/thertzlor/vscode-chss)
+![Version](https://img.shields.io/visual-studio-marketplace/v/thertzlor.vscode-chss) ![License](https://img.shields.io/github/license/thertzlor/vscode-chss) [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/vscode-chss/badge/main)](https://www.codefactor.io/repository/github/thertzlor/vscode-chss/overview/main)
 
 Is the syntax highlighting with regular VSCode themes not detailed enough?  
 Did you ever wish you could use CSS to style your code yourself and assign colors and decorations to variables or functions with specific names?  
@@ -17,6 +17,7 @@ The future is now. Imagine styling the css file that styles your website with cs
 Some may say technology has gone too far. Install this extension to find out if they are right.
 
 ## Installation
+Install from VSCode or via the [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=thertzlor.vscode-chss).  
 After installing the extension, simply create a file with the `.chss` extension in the root directory of any project and you're ready to go.  
 The location of the file and some other behavior can be changed in the [extension's settings](#extension-settings).
 ## Compatibility
