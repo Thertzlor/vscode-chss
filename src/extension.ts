@@ -7,6 +7,7 @@ import {isAbsolute} from 'path';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
 const getConfigGeneric = <O extends Record<string,unknown>>(section:string) => <K extends Extract<keyof O,string>>(name:K) => ((c=workspace.getConfiguration(section)) => (c.get(name)??c.inspect(name)?.defaultValue) as O[K])();
+const decoGlobal = new Map<string,TextEditorDecorationType>();
 export async function activate(context:ExtensionContext) {
   // const selector: vscode.DocumentSelector = 'custom';
   // const textmateService = new TextmateLanguageService('typescript', context);
@@ -19,19 +20,27 @@ export async function activate(context:ExtensionContext) {
   const main = async() => {
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
     const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
-    const decorations = new Map<string,Map<string,[TextEditorDecorationType,Range[]]>>();
+    const decorations = new Map<string,Map<string,[decoRanges:Range[]]>>();
 
     let rules = parser.parseChss(chssText);
+    const reApply=async(editor = window.activeTextEditor) => {
+      if (!editor) return;
+      const textDocument = editor.document;
+      const {uri} = textDocument;
+      const uString = uri.toString();
+      const decos = (decorations.has(uString)?decorations.get(uString):decorations.set(uString, new Map()).get(uString))!;
+      for (const [k,[rs]] of decos.entries()) (rs.length && decoGlobal.has(k)) && editor.setDecorations(decoGlobal.get(k)!, rs);
+    };
     const processEditor = async(editor = window.activeTextEditor,full=false) => {
       if (!editor) return;
       const textDocument = editor.document;
       const {uri} = textDocument;
       const uString = uri.toString();
       const decos = (decorations.has(uString)?decorations.get(uString):decorations.set(uString, new Map()).get(uString))!;
-      for (const [k,[t,arr]] of decos.entries()) {
+      for (const [k,[arr]] of decos.entries()) {
         arr.length=0;
         if (full){
-          t.dispose();
+          editor.setDecorations(decoGlobal.get(k)!, []);
           decos.delete(k);
         }
       }
@@ -44,22 +53,27 @@ export async function activate(context:ExtensionContext) {
       const chss = parser.processChss(ranges,rules,textDocument,insen);
       for (const {style,range,pseudo} of chss) {
         const stryle = JSON.stringify(style);
-        if (decos.has(stryle)){
-          const doco = decos.get(stryle)!;
-          doco[1].push(range);
-        } else decos.set(stryle,[window.createTextEditorDecorationType(pseudo?{[pseudo]:style}:style),[range]]);
+        if (decoGlobal.has(stryle)){
+          const doco = decos.get(stryle) ?? decos.set(stryle, [[]]).get(stryle)!;
+          doco[0].push(range);
+        } else {
+          const newType = window.createTextEditorDecorationType(pseudo ? {[pseudo]: style} : style);
+          decoGlobal.set(stryle,newType);
+          decos.set(stryle,[[range]]);
+        }
       }
-      for (const [k,[style,rs]] of decos.entries()){
-        if (rs.length)editor.setDecorations(style, rs);
+      for (const [k,[rs]] of decos.entries()){
+        if (rs.length && decoGlobal.has(k))editor.setDecorations(decoGlobal.get(k)!, rs);
         else {
-          style.dispose();
+          decoGlobal.get(k)?.dispose();
+          decoGlobal.delete(k);
           decos.delete(k);
         }
       }
     };
     const processAll = () => {for (const e of window.visibleTextEditors) processEditor(e,true);};
     processAll();
-    context.subscriptions.push(window.onDidChangeActiveTextEditor(e => processEditor(e)), workspace.onDidChangeTextDocument(e => {
+    context.subscriptions.push(window.onDidChangeActiveTextEditor(e => (decorations.has(e?.document.uri.toString()??'')?reApply(e):processEditor(e))), workspace.onDidChangeTextDocument(e => {
       if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
       if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
         rules = parser.parseChss(e.document.getText());
@@ -87,4 +101,7 @@ export async function activate(context:ExtensionContext) {
     });
     context.subscriptions.push(createWatcher);
   } else main();
+}
+export async function deactivate(){
+  for (const element of decoGlobal.values()) element.dispose();
 }
