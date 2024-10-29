@@ -1,6 +1,6 @@
 import {Range ,languages, RelativePattern} from 'vscode';
 import type {TextDocument, Uri} from 'vscode';
-import type {TokenData} from './rangesByName';
+import type {TokenCollection} from './rangesByName';
 import color from 'tinycolor2';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
@@ -136,7 +136,7 @@ export class ChssParser{
     return !!name[type](val);
   }
 
-  public processChss(rangeObject:Record<string, Set<TokenData>>,rules:ChssRule[],doc?:TextDocument,insensitive=false):ChssMatch[]{
+  public processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):ChssMatch[]{
     const matched:ProtoChssMatch[] = [];
     const combined = new Map<string,ChssMatch>();
     for (const {selector,style,scope,colorActions} of rules) {
@@ -144,7 +144,7 @@ export class ChssParser{
       for (const parsed of selector) {
         const targetType = parsed.type;
         if (!(targetType in rangeObject) && targetType !== '*') continue;
-        for (const {name,range,modifiers} of targetType === '*'?Object.keys(rangeObject).flatMap(k => [...rangeObject[k]]):rangeObject[targetType]) {
+        for (const {name,range,modifiers} of targetType === '*'?rangeObject._all:rangeObject[targetType]) {
           const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
           if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(m => !modifiers.includes(m))) matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity});
         }

@@ -61,8 +61,9 @@ import * as vscode from 'vscode';
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
 export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string};
+export type TokenCollection = Record<string, Set<TokenData>> & {_byRange:Map<string,TokenData|undefined>,_all:Set<TokenData>};
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
-  const accumulator:Record<string, Set<TokenData>|undefined> = {};
+  const accumulator= {_byRange:new Map<string,TokenData>(),_all:new Set<TokenData>()} as TokenCollection;
   const recordSize = 5;
   let line = 0;
   let column = 0;
@@ -77,8 +78,11 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const modifiers = legend.tokenModifiers.filter(m => modifierIndex & modifierFlags[m]);
     const range = new vscode.Range(line, column, line, column + length);
     const name = editor.document.getText(range);
-    if (!accumulator[kind])accumulator[kind]=new Set();
-    accumulator[kind].add({range,name,modifiers,type:kind});
+    if (!(kind in accumulator))accumulator[kind]=new Set();
+    const t = {range, name, modifiers, type: kind};
+    accumulator._all.add(t);
+    accumulator._byRange.set([range.start.line,range.start.character,range.end.line,range.end.character].join('|'),t);
+    accumulator[kind].add(t);
   }
-  return accumulator as Record<string, Set<TokenData>>;
+  return accumulator;
 }
