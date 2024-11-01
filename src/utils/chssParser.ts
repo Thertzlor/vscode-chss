@@ -63,7 +63,7 @@ export class ChssParser{
     if (selector.startsWith('[')){ // extended type with one or more modifiers: [variable]:readonly
       const [sel='',...modifiers] = selector.split(':');
       if (!modifiers.length || !sel.endsWith(']')) return invalid;
-      return {specificity:[base,1,modifiers.length], name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/').map(t => t.trim())),pseudo};
+      return {specificity:[base,1,modifiers.length], name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo};
     }
     if (selector.includes('[') && selector.includes(']')){ //compound: name[variable]:readonly
       if (!/\w/.test(selector.charAt(0))) return invalid;//eslint-disable-next-line unicorn/better-regex
@@ -71,7 +71,7 @@ export class ChssParser{
       if (!type) return invalid;
       if (!mods) return {specificity:[base+1,1,0], name, type:type.split('/').map(t => t.trim()),modifiers:[]};
       const splitMods = mods.split(':').filter(s => s);
-      return {specificity:[base+1,1,mods.length], name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo};
+      return {specificity:[base+1,1,mods.length], name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
     // name with modifiers: variable:modifier
@@ -79,7 +79,7 @@ export class ChssParser{
     if (!ident) return splitMods.length? {specificity:[base,0,splitMods.length], name:'', type:['*'],modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo}:invalid;
     const {specificity:[id,cl,ty],name,type} = ident!=='/'?this.parseSelector(ident,base):{specificity:[-1] as const,name:'',type:['']};
     if (id === -1) return invalid;
-    return {specificity:[id,cl!,ty!+splitMods.length], name, type,modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo};
+    return {specificity:[id,cl!,ty!+splitMods.length], name, type,modifiers:splitMods.map(m => m.split('/')),pseudo};
   }
 
   /**
