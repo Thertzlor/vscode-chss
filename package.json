@@ -2,7 +2,7 @@
   "name": "vscode-chss",
   "displayName": "CHSS: Code Highlighting Style Sheets",
   "description": "CSS-esque code styling in real-time",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "repository": "https://github.com/Thertzlor/vscode-chss",
   "license": "GPL-3.0-or-later",
   "publisher": "thertzlor",

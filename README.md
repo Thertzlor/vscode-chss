@@ -91,13 +91,15 @@ Every property that accepts a color value can also accept a [color transformatio
 
 ### Basic Selectors
 
-| Selector        | Example       | Description                                     | Notes                                               |
-| --------------- | ------------- | ----------------------------------------------- | --------------------------------------------------- |
-| **name**        | `foo`         | select any type of token named 'foo'            |
-| **#var**        | `#foo`        | Select any variable named 'foo'                 |                                                     |
-| **.function**   | `.getFoo`     | Select any function with named 'getFoo'         |                                                     |
-| **:modifier**   | `:readonly`   | select only tokens with the *readonly* modifier | Multiple `:` modifers can be chained.               |
-| **[tokenType]** | `[parameter]` | select all semantic tokens of type "parameter"  | Semantic token names depend on the language server. |
+| Selector          | Example              | Description                                                       | Notes                                                                      |
+| ----------------- | -------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **name**          | `foo`                | select any type of token named 'foo'                              |
+| **#var**          | `#foo`               | Select any variable named 'foo'                                   |                                                                            |
+| **.function**     | `.getFoo`            | Select any function with named 'getFoo'                           |                                                                            |
+| **:modifier**     | `:readonly`          | select only tokens with the *readonly* modifier                   | Multiple `:` modifers can be chained.                                      |
+| **:mod1/mod2**    | `:declaration/async` | select only tokens with the *declaration* **or** *async* modifier | More than two slashes are supported, whitespace around the slashes is not. |
+| **[tokenType]**   | `[parameter]`        | select all semantic tokens of type "parameter"                    | Semantic token names depend on the language server.                        |
+| **[type1/type2]** | `[class/property]`   | select all semantic tokens of type "class" **or** "property"      | More than two slashes are supported as well as whitespace around them.     |
 ### Combined selectors
 Type and name selectors can be combined such as `Example[class]` and modifier selectors can be combined with any other type, for example `foo:readonly`, `.getFoo:async` and a combination of all three types is possible as well (`Example[class]:declaration`) as long as the order of *name -> type -> modifier* is preserved.
 

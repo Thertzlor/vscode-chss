@@ -3,6 +3,11 @@
 All notable changes to the "vscode-chss" extension will be documented in this file.  
 Some less notable ones too.
 
+## [0.4.3]
+- Added support for selecting multiple types and modifiers with a single selector by separating them with slashes.
+  * For example: `[property/variable]` or `:declaration/readonly`
+  * (I would have loved to implement this with `|` instead, but it would have broken the syntax highlighting.)
+- Added support for the `::dark` and `::light` pseudo-classes to style light- and dark-themed versions of tokens respectively.
 ## [0.4.2]
 - Huge performance improvements:
   * Reapplying styles without recalculating them if there was no change in an inactive editor.
