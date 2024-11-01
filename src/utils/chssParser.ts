@@ -1,7 +1,9 @@
 import {Range ,languages, RelativePattern} from 'vscode';
+import color from 'tinycolor2';
+import {rangeToIdentifier} from './helperFunctions';
 import type {TextDocument, Uri} from 'vscode';
 import type {TokenCollection} from './rangesByName';
-import color from 'tinycolor2';
+import type {RangeIdentifier} from './helperFunctions';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 interface ParsedSelector {type:string, specificity:Specifity, name:string, modifiers:string[], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
@@ -10,7 +12,7 @@ interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseud
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
 const pseudos = ['before', 'after', 'light', 'dark'] as const;
-type Pseudo = typeof pseudos[number];
+export type Pseudo = typeof pseudos[number];
 type ColorAction = typeof colorMods[number];
 type Specifity = [_id:number,_class:number,_type:number];
 
@@ -138,7 +140,7 @@ export class ChssParser{
 
   public processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):ChssMatch[]{
     const matched:ProtoChssMatch[] = [];
-    const combined = new Map<string,ChssMatch>();
+    const combined = new Map<RangeIdentifier,ChssMatch>();
     for (const {selector,style,scope,colorActions} of rules) {
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
       for (const parsed of selector) {
@@ -153,7 +155,7 @@ export class ChssParser{
 
     for (const current of matched){
       const {range, style,colorActions,pseudo} =current;
-      const rangeIdent = [range.start.line,range.start.character,range.end.line,range.end.character,pseudo].join('|');
+      const rangeIdent = rangeToIdentifier(range,pseudo);
       if (!combined.has(rangeIdent)){
         combined.set(rangeIdent, current);
       } else {
