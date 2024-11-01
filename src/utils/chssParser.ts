@@ -186,6 +186,12 @@ export class ChssParser{
       const {range, style,colorActions,pseudo} =current;
       const rangeIdent = rangeToIdentifier(range,pseudo);
 
+      // Random is a special case that does not need any preexisting color.
+      for (const [name,[action]] of colorActions?.entries() ?? []) {
+        if (action !== 'random') continue;
+        style[name] = color.random().toHex8String();
+      }
+
       if (!combined.has(rangeIdent)) combined.set(rangeIdent, current);
       else {
         const old = combined.get(rangeIdent)!;
@@ -194,13 +200,9 @@ export class ChssParser{
 
         if (!moreSpecific && colorActions){
           for (const [name,[action,args]] of colorActions.entries()) {
-
-            if (action === 'random') {
-              style[name] = color.random().toHex8String();
-              continue;
-            }
-
+            if (action === 'random') continue;
             if (!(name in old.style)) continue;
+
             const colorIdent = [old.style[name],action,args].join('-');
 
             if (this.colorMap.has(colorIdent)) {
