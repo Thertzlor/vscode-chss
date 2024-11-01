@@ -8,6 +8,7 @@ Some less notable ones too.
   * For example: `[property/variable]` or `:declaration/readonly`
   * (I would have loved to implement this with `|` instead, but it would have broken the syntax highlighting.)
 - Added support for the `::dark` and `::light` pseudo-classes to style light- and dark-themed versions of tokens respectively.
+- Implemented a debouncer to limit style refreshes to once every 100ms.
 ## [0.4.2]
 - Huge performance improvements:
   * Reapplying styles without recalculating them if there was no change in an inactive editor.

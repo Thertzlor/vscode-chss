@@ -33,8 +33,10 @@ export class ChssParser{
     const invalid = {specificity:[-1,-1,-1] as Specifity, name:'', type:[''],modifiers:[]};
     const pseudo = pseudos.find(b => rawSelector.includes(`::${b}`));
     const selector = pseudo?rawSelector.replaceAll(`::${pseudo}`, ''):rawSelector;
+
     if (selector === '*') return {specificity:[base,0,0], name:'', type:['*'],modifiers:[],pseudo};
     if (/^\w+$/.test(selector)) return {specificity:[base+1,0,0], name:selector, type:['*'],modifiers:[],pseudo}; // name selector for all types: name
+
     if (/^\w+$/.test(selector.slice(1)) && !selector.startsWith(':')){
       const sliced = selector.charAt(0);
       switch (sliced) {
@@ -43,6 +45,7 @@ export class ChssParser{
       default: return invalid;
       }
     }
+
     if (selector.startsWith('<') && selector.endsWith('>')){ // Advanced match: <wildc*rd> | <^=textmatch> | <"/RegEx/"> | <^=match=type>
       const [operator,val,rawType] = selector.slice(1,-1).split('=').map(s => ((t=s.trim()) => (t.startsWith('"') && t.endsWith('"')?t.slice(1,-1):t))());
       //console.log({operator,val});
@@ -50,6 +53,7 @@ export class ChssParser{
       const mType:MatchType = ops[operator] ?? 'match';
       const matchSpecs = {match:4,startsWith:3,endsWith:3,includes:2};
       const value = val || operator;
+
       if (mType === 'match' && !value.includes('*') && !/^"\/.+\/i?"$/.test(value)) return invalid;
       const insense = value.slice(0,-1).endsWith('/i');
       const regexp=mType === 'match'?new RegExp(value.startsWith('"') && value.endsWith('"')?value.slice(2,insense?-3:-2):`^${value.replace('*','.*')}$`,insense && value.startsWith('"')?'i':undefined):undefined;
