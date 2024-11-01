@@ -6,8 +6,8 @@ import type {TokenCollection} from './rangesByName';
 import type {RangeIdentifier} from './helperFunctions';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
-interface ParsedSelector {type:string, specificity:Specifity, name:string, modifiers:string[], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
-interface ChssRule {selector:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
+interface ParsedSelector {type:string, specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
+interface ChssRule {selector:ParsedSelector[], complex?:boolean, style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
 interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>}
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
@@ -63,7 +63,7 @@ export class ChssParser{
     if (selector.startsWith('[')){ // extended type with one or more modifiers: [variable]:readonly
       const [sel='',...modifiers] = selector.split(':');
       if (!modifiers.length || !sel.endsWith(']')) return invalid;
-      return {specificity:[base,1,modifiers.length], name:'', type:sel.slice(1,-1),modifiers,pseudo};
+      return {specificity:[base,1,modifiers.length], name:'', type:sel.slice(1,-1),modifiers:modifiers.map(m => m.split('/')),pseudo};
     }
     if (selector.includes('[') && selector.includes(']')){ //compound: name[variable]:readonly
       if (!/\w/.test(selector.charAt(0))) return invalid;//eslint-disable-next-line unicorn/better-regex
@@ -71,15 +71,15 @@ export class ChssParser{
       if (!type) return invalid;
       if (!mods) return {specificity:[base+1,1,0], name, type,modifiers:[]};
       const splitMods = mods.split(':').filter(s => s);
-      return {specificity:[base+1,1,mods.length], name, type,modifiers:splitMods,pseudo};
+      return {specificity:[base+1,1,mods.length], name, type,modifiers:splitMods.map(m => m.split('/')),pseudo};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
     // name with modifiers: variable:modifier
     const [ident, ...splitMods] = selector.split(':');
-    if (!ident) return splitMods.length? {specificity:[base,0,splitMods.length], name:'', type:'*',modifiers:splitMods,pseudo}:invalid;
-    const {specificity:[id,cl,ty],name,type} = this.parseSelector(ident,base);
+    if (!ident) return splitMods.length? {specificity:[base,0,splitMods.length], name:'', type:'*',modifiers:splitMods.map(m => m.split('/')),pseudo}:invalid;
+    const {specificity:[id,cl,ty],name,type} = ident!=='/'?this.parseSelector(ident,base):{specificity:[-1] as const,name:'',type:''};
     if (id === -1) return invalid;
-    return {specificity:[id,cl,ty+splitMods.length], name, type,modifiers:splitMods,pseudo};
+    return {specificity:[id,cl!,ty!+splitMods.length], name, type,modifiers:splitMods.map(m => m.split('/')),pseudo};
   }
 
   /**
@@ -101,6 +101,7 @@ export class ChssParser{
           continue;
         }
         const baseVal = currentScope?1:0;
+        // const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+)*|<[^>]+?>|(?::\w+)+|\[[^]*?]+(?::+\w+)*/g;
         const selectors = v.split(',').map(s => s.trim()).filter(s => s).map(s => this.parseSelector(s,baseVal)).filter(({specificity:[id]}) => id !== -1);
         if (!selectors.length){skipNext = true; continue;}
         const protoRule:ChssRule = {selector:selectors,style:{}};
@@ -148,7 +149,7 @@ export class ChssParser{
         if (!(targetType in rangeObject) && targetType !== '*') continue;
         for (const {name,range,modifiers} of targetType === '*'?rangeObject._all:rangeObject[targetType]) {
           const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
-          if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(m => !modifiers.includes(m))) matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity});
+          if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(a => a.every(m => !modifiers.includes(m)))) matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity});
         }
       }
     }
