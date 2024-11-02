@@ -184,7 +184,6 @@ This extension has the following settings:
 
 * Brainstorming some very silly ideas about converting an AST to a DOM and running actual CSS selectors on it for proper positional selectors. This is going to be very inefficient. 
 * `:not()` pseudo class would be neat.
-* `::light` and `::dark` pseudo classes to style for light and dark themes.
 * There used to be a fairly popular extension called [Apc Customize UI++](https://github.com/drcika/apc-extension) for injecting custom CSS which is unfortunately not working in recent VSCode versions. If it gets fixed, or another real-time CSS injector really takes off, it would be maybe possible to unlock the full power of CSS for CHSS.
 * *Maybe* adding support for selecting textmate scopes, (but VSCode also might pivot to Tree-Sitter as the language server fallback, so who knows). This is also going to be inefficient if it ever happens.
 
