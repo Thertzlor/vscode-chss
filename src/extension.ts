@@ -9,7 +9,6 @@ import {debounce} from './utils/helperFunctions';
 
 const getConfigGeneric = <O extends Record<string,unknown>>(section:string) => <K extends Extract<keyof O,string>>(name:K) => ((c=workspace.getConfiguration(section)) => (c.get(name)??c.inspect(name)?.defaultValue) as O[K])();
 const decoGlobal = new Map<string,TextEditorDecorationType>();
-const debounceVal = 100;
 
 export async function activate(context:ExtensionContext) {
   // const selector: vscode.DocumentSelector = 'custom';
@@ -26,6 +25,7 @@ export async function activate(context:ExtensionContext) {
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
     const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
     const decorations = new Map<string,Map<string,[decoRanges:Range[]]>>();
+    const debounceVal = 100;
 
     let rules = parser.parseChss(chssText);
 
@@ -62,6 +62,7 @@ export async function activate(context:ExtensionContext) {
 
       for (const {style,range,pseudo} of chss) {
         const stryle = JSON.stringify(style);
+
         if (decoGlobal.has(stryle)){
           const doco = decos.get(stryle) ?? decos.set(stryle, [[]]).get(stryle)!;
           doco[0].push(range);
@@ -73,7 +74,7 @@ export async function activate(context:ExtensionContext) {
       }
 
       for (const [k,[rs]] of decos.entries()){
-        if (rs.length && decoGlobal.has(k))editor.setDecorations(decoGlobal.get(k)!, rs);
+        if (rs.length && decoGlobal.has(k)) editor.setDecorations(decoGlobal.get(k)!, rs);
         else {
           decoGlobal.get(k)?.dispose();
           decoGlobal.delete(k);
@@ -101,9 +102,11 @@ export async function activate(context:ExtensionContext) {
       workspace.onDidChangeConfiguration(
         async(e:ConfigurationChangeEvent) => {
           let reProcess = false;
+
           e.affectsConfiguration('chss.realtimeCHSS') && (directUpdate = getConfig('realtimeCHSS'));
           if (e.affectsConfiguration('chss.stylesheetLocation')) {chssFile = await loadFile(); reProcess = true;}
           if (e.affectsConfiguration('chss.caseInsensitiveMatch')) {insen = getConfig('caseInsensitiveMatch'); reProcess = true;}
+
           reProcess && processAll();
         }
       )

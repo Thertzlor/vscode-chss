@@ -66,11 +66,14 @@ export type TokenCollection = Record<string, Set<TokenData>> & {_byRange:Map<Ran
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
   const accumulator= {_byRange:new Map<string,TokenData>(),_all:new Set<TokenData>()} as TokenCollection;
   const recordSize = 5;
+
   let line = 0;
   let column = 0;
+
   for (let i = 0; i < data.data.length; i += recordSize) {
     const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
     const kind = legend.tokenTypes[kindIndex];
+
     column = deltaLine === 0 ? column : 0;
     line += deltaLine;
     column += deltaColumn;
@@ -79,11 +82,14 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const modifiers = legend.tokenModifiers.filter(m => modifierIndex & modifierFlags[m]);
     const range = new vscode.Range(line, column, line, column + length);
     const name = editor.document.getText(range);
+
     if (!(kind in accumulator))accumulator[kind]=new Set();
     const t = {range, name, modifiers, type: kind};
+
     accumulator._all.add(t);
     accumulator._byRange.set(rangeToIdentifier(range),t);
     accumulator[kind].add(t);
   }
+
   return accumulator;
 }
