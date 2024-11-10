@@ -20,6 +20,7 @@ export async function activate(context:ExtensionContext) {
   let directUpdate = getConfig('realtimeCHSS');
   let insen = getConfig('caseInsensitiveMatch');
   let chssFile = await loadFile();
+  console.log('imagine activating an extension');
 
   const main = async() => {
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
@@ -55,10 +56,9 @@ export async function activate(context:ExtensionContext) {
           decos.delete(k);
         }
       }
-      // const tokens = await textmateTokenService.fetch(textDocument);
-      // console.log(await commands.executeCommand('vscode.executeDocumentSymbolProvider',window.activeTextEditor?.document.uri));
+
       const ranges = rangesByName(tokensData,legend,editor);
-      const chss = parser.processChss(ranges,rules,textDocument,insen);
+      const chss = await parser.processChss(ranges,rules,textDocument,insen);
 
       for (const {style,range,pseudo} of chss) {
         const stryle = JSON.stringify(style);

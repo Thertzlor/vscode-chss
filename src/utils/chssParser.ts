@@ -1,9 +1,10 @@
-import {Range ,languages, RelativePattern} from 'vscode';
+import {Range ,languages, RelativePattern,window,ViewColumn} from 'vscode';
 import color from 'tinycolor2';
 import {rangeToIdentifier} from './helperFunctions';
 import type {TextDocument, Uri} from 'vscode';
 import type {TokenCollection} from './rangesByName';
 import type {RangeIdentifier} from './helperFunctions';
+import {DomSimulator} from './domSimulator';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 export interface ParsedSelector {type:string[], specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
@@ -108,7 +109,6 @@ export class ChssParser{
     let currentScope:string|undefined;
     for (const [i,v] of source.replaceAll(/\/\/.*/g,'').replaceAll(/{\s*}/gm,'{empty}').split(/[{}]/gm).map(s => s.trim()).entries()) {
       const selector = (i + (currentScope?1:0)) % 2 === 0;
-
       if (currentScope && !v){currentScope = undefined; continue;}
       if (skipNext){skipNext = false; continue;}
       if (selector && !v) {skipNext = true; continue;}
@@ -161,10 +161,14 @@ export class ChssParser{
 
   private matchName(name:string,type:MatchType,val:string,reg?:RegExp){return reg?reg.test(name):!!name[type](val);}
 
-  public processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):ChssMatch[]{
+  public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
     const matched:ProtoChssMatch[] = [];
     const combined = new Map<RangeIdentifier,ChssMatch>();
-
+    const dom = doc && await DomSimulator.init(doc.uri, rangeObject);
+    if (dom){
+      const wbv = window.createWebviewPanel('dummyDom', 'Your Dom', {preserveFocus:true,viewColumn:ViewColumn.Beside});
+      wbv.webview.html = dom.getHtml();
+    }
     for (const {selector,style,scope,colorActions} of rules) {
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
       for (const parsed of selector) {

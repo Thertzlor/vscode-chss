@@ -61,7 +61,7 @@ import {rangeToIdentifier, type RangeIdentifier} from './helperFunctions';
  * *NOTE*: When doing edits, it is possible that multiple edits occur until VS Code decides to invoke the semantic tokens provider.
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
-export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string};
+export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string,index:number};
 export type TokenCollection = Record<string, Set<TokenData>> & {_byRange:Map<RangeIdentifier,TokenData|undefined>,_all:Set<TokenData>};
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
   const accumulator= {_byRange:new Map<string,TokenData>(),_all:new Set<TokenData>()} as TokenCollection;
@@ -69,6 +69,7 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
 
   let line = 0;
   let column = 0;
+  let index = 0;
 
   for (let i = 0; i < data.data.length; i += recordSize) {
     const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
@@ -84,8 +85,8 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const name = editor.document.getText(range);
 
     if (!(kind in accumulator))accumulator[kind]=new Set();
-    const t = {range, name, modifiers, type: kind};
-
+    const t = {range, name, modifiers, type: kind,index};
+    index++;
     accumulator._all.add(t);
     accumulator._byRange.set(rangeToIdentifier(range),t);
     accumulator[kind].add(t);
