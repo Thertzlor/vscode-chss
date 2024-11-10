@@ -164,7 +164,7 @@ export class ChssParser{
   public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
     const matched:ProtoChssMatch[] = [];
     const combined = new Map<RangeIdentifier,ChssMatch>();
-    const dom = doc && await DomSimulator.init(doc.uri, rangeObject);
+    const dom = doc && await DomSimulator.init(doc.uri, rangeObject,doc);
     if (dom){
       const wbv = window.createWebviewPanel('dummyDom', 'Your Dom', {preserveFocus:true,viewColumn:ViewColumn.Beside});
       wbv.webview.html = dom.getHtml();
