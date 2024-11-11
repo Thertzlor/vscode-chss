@@ -22,8 +22,14 @@ export class DomSimulator{
     private readonly document = (new DOMParser()).parseFromString('<html><head></head><body></body></html>', 'text/html'),
     private readonly queryMap = new Map<string,Range[]>()
   ){
+    const lang = stringContent.languageId;
     const todex = new Set<number>();
-    const accessors = new Set(['.']);
+    const accessors =new Set(
+      lang === 'typescript'?['.','?.','!.']:
+      lang === 'javascript'?['.','?.']:
+      lang === 'lua'?['.',':']:
+      ['.']
+    );
     const hasFields = new Set<SymbolToken>(['class','property','variable','object','parameter']);
     const isField = new Set<SymbolToken>(['property','method']);
     const collapsable = new Set<SymbolToken>(['variable','constant']);
@@ -113,7 +119,6 @@ export class DomSimulator{
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
     const syms:DocumentSymbol[] = await commands.executeCommand('vscode.executeDocumentSymbolProvider',target);
-    console.log(syms);
     return new DomSimulator(syms,tokens,target,text);
   }
 }
