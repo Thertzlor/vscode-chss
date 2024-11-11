@@ -56,16 +56,12 @@ export class DomSimulator{
         let currentData:SymbolData|undefined;
         for (const tok of all) {
           if (!top && fullRange.start.isAfterOrEqual(tok.range.end)) continue;
-          if (!top &&fullRange.end.isBeforeOrEqual(tok.range.start)) break;
+          if (!top && (sym.children.length?fullRange:range).end.isBeforeOrEqual(tok.range.start)) break;
           if (todex.has(tok.index)) continue;
-          todex.add(tok.index);
           const sy = tokenToSymbol(tok);
           const sData:SymbolData = {tk:tok,sy,tp:getNodeType(sy,tok)};
-          let stillProp = false;
           if (currentData && isField.has(sData.tp) && hasFields.has(currentData.tp) && accessors.has(stringContent.getText(new Range(currentData.tk.range.end,sData.tk.range.start)).trim())){
             currentData.sy.children.push(sData.sy);
-            console.log(`${sData.tk.name} property of ${currentData.tk.name}`);
-            stillProp = true;
           } else tokenSymbols.add(sData);
           currentData = hasFields.has(sData.tp)? sData:undefined;
         }
@@ -81,11 +77,13 @@ export class DomSimulator{
     sortChildren(document.body);
   }
 
-  public rangesFromQuery(selector:string){
+  public rangesFromQuery(selector:string,full=false){
     if (this.queryMap.has(selector)) return this.queryMap.get(selector)!;
-    const ranges = this.document.querySelectorAll(selector).map((n:HTMLElement) => identifierToRange(n.getAttribute('data-fullrange')));
-    this.queryMap.set(selector, ranges);
-    return ranges;
+    try {const ranges = this.document.querySelectorAll(selector).map((n:HTMLElement) => identifierToRange(n.getAttribute(`data-${full?'fullrange':'namerange'}`)));
+      this.queryMap.set(selector, ranges);
+      return ranges;} catch {
+      return [];
+    }
   }
 
   public getSelectionAccuracy(sel:ParsedSelector){
@@ -93,101 +91,26 @@ export class DomSimulator{
     return true;
   }
 
-  public selectorToQuery(sel:ParsedSelector){}
+  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=['div'],regexRanges?:Range[]){
+    const finalTypes = type.filter(f => f!=='*');
+    let selectorStrings = prevSelectors;
+    if (match === 'match' && regexRanges?.length)selectorStrings = regexRanges.flatMap(r => selectorStrings.map(s => `${s}[data-namerange="${rangeToIdentifier(r)}"]`));
+    else if (match &&match !== 'match')selectorStrings = selectorStrings.map(s => `${s}[data-namerange${match === 'includes'?'*':match === 'startsWith'?'^':'$'}="${name}"]`);
+    else if (name && name !== '*') selectorStrings = selectorStrings.map(s => `${s}[data-name="${name}"]`);
+    if (modifiers.length)selectorStrings = modifiers.flatMap(m => selectorStrings.map(s => `${s}.${m.join('.')}`));
+    if (finalTypes.length)selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}.${t}`));
+    return selectorStrings;
+  }
 
   public getHtml(){
     const styled = /*html*/`
-      <!DOCTYPE html>
-      <html><head>
-            <style>
-              html,body{
-                width:100%;
-                text-align:center
-              }
-              .array {
-                background: yellow;
-              }
-
-              .variable {
-                background: rgb(205, 63, 63);
-              }
-
-              .constant {
-                background: rgb(126, 41, 41);
-              }
-
-              .class {
-                background: rgb(0, 128, 124);
-              }
-
-              .object {
-                background: green;
-              }
-
-              .property {
-                background: rgb(144, 179, 103);
-              }
-
-              .function {
-                background: blue;
-              }
-
-              .method {
-                background: rgb(29, 155, 155);
-              }
-
-              .parameter {
-                background: orange;
-              }
-
-              .constructor {
-                background: purple;
-              }
-
-              .type {
-                background: rgb(239, 239, 148);
-              }
-                  .typeParameter {
-          background: rgb(239, 199, 148);
-            }
-
-              .interface {
-                background: rgb(239, 210, 148);
-              }
-
-
-              div {
-                margin: .5em;
-                padding: .2em;
-                border: 1px solid black;
-                width: 90%;
-                background: grey;
-                min-height: 1em;
-                display:inline-block;
-                color:black;
-                text-align:center
-              }
-
-              div::before {
-                display: block;
-                font-weight: bold;
-                content: attr(data-name);
-              }
-            </style>
-          </head>
-
-          <body>
-           ${this.document.body.innerHTML}
-          </body>
-
-          </html>
+      <!DOCTYPE html> <html><head> <style> html,body{ width:100%; text-align:center } .array { background: yellow; } .variable { background: rgb(205, 63, 63); } .constant { background: rgb(126, 41, 41); } .class { background: rgb(0, 128, 124); } .object { background: green; } .property { background: rgb(144, 179, 103); } .function { background: blue; } .method { background: rgb(29, 155, 155); } .parameter { background: orange; } .constructor { background: purple; } .type { background: rgb(239, 239, 148); } .typeParameter { background: rgb(239, 199, 148); } .interface { background: rgb(239, 210, 148); } div { margin: .5em; padding: .2em; border: 1px solid black; width: 90%; background: grey; min-height: 1em; display:inline-block; color:black; text-align:center } div::before { display: block; font-weight: bold; content: attr(data-name); } </style> </head> <body> ${this.document.body.innerHTML} </body> </html>
     `;
     return styled;
   }
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
     const syms:DocumentSymbol[] = await commands.executeCommand('vscode.executeDocumentSymbolProvider',target);
-    console.log(syms);
     return new DomSimulator(syms,tokens,target,text);
   }
 }

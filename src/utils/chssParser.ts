@@ -8,7 +8,7 @@ import {DomSimulator} from './domSimulator';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 export interface ParsedSelector {type:string[], specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
-interface ChssRule {selector:ParsedSelector[], complex?:boolean, style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
+interface ChssRule {selector:ParsedSelector[], operators:string[], complex?:boolean, style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
 interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>}
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 export type Pseudo = typeof pseudos[number];
@@ -17,6 +17,8 @@ type Specifity = [_id:number,_class:number,_type:number];
 
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
 const pseudos = ['before', 'after', 'light', 'dark'] as const;
+
+const sumSpecificity = ([a1,b1,c1]:Specifity,[a2,b2,c2]:Specifity):Specifity => [a1+a2,b1+b2,c1+c2];
 
 export class ChssParser{
   constructor(
@@ -31,20 +33,20 @@ export class ChssParser{
     return false;
   }
 
-  private parseSelector(rawSelector:string,base=0):ParsedSelector{
+  private parseSelector(rawSelector:string,base:Specifity=[0,0,0]):ParsedSelector{
     const invalid = {specificity:[-1,-1,-1] as Specifity, name:'', type:[''],modifiers:[]};
     const pseudo = pseudos.find(b => rawSelector.includes(`::${b}`));
     const selector = pseudo?rawSelector.replaceAll(`::${pseudo}`, ''):rawSelector;
 
-    if (selector === '*') return {specificity:[base,0,0], name:'', type:['*'],modifiers:[],pseudo};
-    if (/^\w+$/.test(selector)) return {specificity:[base+1,0,0], name:selector, type:['*'],modifiers:[],pseudo}; // name selector for all types: name
+    if (selector === '*') return {specificity:sumSpecificity(base,[0,0,0]), name:'', type:['*'],modifiers:[],pseudo};
+    if (/^\w+$/.test(selector)) return {specificity:sumSpecificity(base,[1,0,0]), name:selector, type:['*'],modifiers:[],pseudo}; // name selector for all types: name
 
     if (/^\w+$/.test(selector.slice(1)) && !selector.startsWith(':')){
       const sliced = selector.charAt(0);
 
       switch (sliced) {
-      case '#': return {specificity:[base+1,1,0], name:selector.slice(1), type:['variable'],modifiers:[],pseudo}; //variable: #name
-      case '.': return {specificity:[base+1,1,0], name:selector.slice(1), type:['function'],modifiers:[],pseudo}; //function: .name
+      case '#': return {specificity:sumSpecificity(base,[1,1,0]), name:selector.slice(1), type:['variable'],modifiers:[],pseudo}; //variable: #name
+      case '.': return {specificity:sumSpecificity(base,[1,1,0]), name:selector.slice(1), type:['function'],modifiers:[],pseudo}; //function: .name
       default: return invalid;
       }
     }
@@ -70,28 +72,28 @@ export class ChssParser{
 
       return {specificity:[id,cl+matchSpecs[mType],ty], name:value, type,modifiers,regexp,match:mType,pseudo};
     }
-    if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:[base,1,0], name:'', type:selector.slice(1,-1).split('/').map(t => t.trim()),modifiers:[],pseudo}; // general type: [variable]
+    if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:sumSpecificity(base,[0,1,0]), name:'', type:selector.slice(1,-1).split('/').map(t => t.trim()),modifiers:[],pseudo}; // general type: [variable]
     if (selector.startsWith('[')){ // extended type with one or more modifiers: [variable]:readonly
       const [sel='',...modifiers] = selector.split(':');
 
       if (!modifiers.length || !sel.endsWith(']')) return invalid;
-      return {specificity:[base,1,modifiers.length], name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo};
+      return {specificity:sumSpecificity(base,[0,1,modifiers.length]), name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo};
     }
     if (selector.includes('[') && selector.includes(']')){ //compound: name[variable]:readonly
       if (!/\w/.test(selector.charAt(0))) return invalid;//eslint-disable-next-line unicorn/better-regex
       const [name,type,mods] = selector.split(/\[|\]/gm);
 
       if (!type) return invalid;
-      if (!mods) return {specificity:[base+1,1,0], name, type:type.split('/').map(t => t.trim()),modifiers:[]};
+      if (!mods) return {specificity:sumSpecificity(base,[1,1,0]), name, type:type.split('/').map(t => t.trim()),modifiers:[]};
       const splitMods = mods.split(':').filter(s => s);
 
-      return {specificity:[base+1,1,mods.length], name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo};
+      return {specificity:sumSpecificity(base,[1,1,mods.length]), name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
     // name with modifiers: variable:modifier
     const [ident, ...splitMods] = selector.split(':');
 
-    if (!ident) return splitMods.length? {specificity:[base,0,splitMods.length], name:'', type:['*'],modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo}:invalid;
+    if (!ident) return splitMods.length? {specificity:sumSpecificity(base,[0,0,splitMods.length]), name:'', type:['*'],modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo}:invalid;
     const {specificity:[id,cl,ty],name,type} = ident!=='/'?this.parseSelector(ident,base):{specificity:[-1] as const,name:'',type:['']};
 
     if (id === -1) return invalid;
@@ -118,12 +120,38 @@ export class ChssParser{
           currentScope = v.match(/.*\((.*)\)$/)?.[1].trim().replace(/^"|"$/,'').replaceAll('\\','/') || '???';
           continue;
         }
-        // const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+)*|<[^>]+?>|(?::\w+)+|\[[^]*?]+(?::+\w+)*/g;
-        const baseVal = currentScope?1:0;
-        const selectors = v.split(',').map(s => s.trim()).filter(s => s).map(s => this.parseSelector(s,baseVal)).filter(({specificity:[id]}) => id !== -1);
+        const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+)*|<[^>]+?>|(?::\w+)+|\[[^]*?]+(?::+\w+)*/g;
+        const baseVal:Specifity = currentScope?[1,0,0]:[0,0,0];
+        const selectorMatches = [];
+        const operators = [];
+        let lastMatch = 0;
+
+        for (let selectMatch = rulEx.exec(v); selectMatch; selectMatch = rulEx.exec(v)) {
+          if (lastMatch)operators.push(v.slice(lastMatch,selectMatch.index).trim()|| ' ');
+          const mainMatch = selectMatch[0].trim();
+          lastMatch = selectMatch.index+mainMatch.length;
+          if (mainMatch.length)selectorMatches.push(mainMatch);
+        }
+
+        const complex = !!(operators.length && operators.some(o => o !== ','));
+        const processedSelectors = [];
+        let combinedSpecificity=baseVal;
+        for (const [j,m] of selectorMatches.entries()){
+          const parsed = this.parseSelector(m,combinedSpecificity);
+          const nextOperator = operators[j];
+          //handling invalid pseudo selectors
+          if (parsed.pseudo && nextOperator && nextOperator !== ','){
+            processedSelectors.length = 0;
+            break;
+          }
+          processedSelectors.push(parsed);
+          combinedSpecificity = nextOperator === ','?baseVal:sumSpecificity(combinedSpecificity,parsed.specificity);
+        }
+
+        const selectors = processedSelectors.filter(({specificity:[id]}) => id !== -1);
 
         if (!selectors.length){skipNext = true; continue;}
-        const protoRule:ChssRule = {selector:selectors,style:{}};
+        const protoRule:ChssRule = {selector:selectors,style:{},complex,operators};
 
         if (currentScope)protoRule.scope = currentScope;
         res.push(protoRule);
@@ -164,26 +192,55 @@ export class ChssParser{
   public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
     const matched:ProtoChssMatch[] = [];
     const combined = new Map<RangeIdentifier,ChssMatch>();
-    const dom = doc && await DomSimulator.init(doc.uri, rangeObject,doc);
+    // We only need the DOM for complex rules
+    const dom = doc && rules.some(r => r.complex)? await DomSimulator.init(doc.uri, rangeObject,doc):undefined;
     if (dom){
-      const wbv = window.createWebviewPanel('dummyDom', 'Your Dom', {preserveFocus:true,viewColumn:ViewColumn.Beside});
-      wbv.webview.html = dom.getHtml();
+      // const wbv = window.createWebviewPanel('dummyDom', 'Your Dom', {preserveFocus:true,viewColumn:ViewColumn.Beside});
+      // wbv.webview.html = dom.getHtml();
+      // for (const r of rules.flatMap(s => s.selector)) console.log(dom.selectorToQuery(r));
     }
-    for (const {selector,style,scope,colorActions} of rules) {
-      if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
-      for (const parsed of selector) {
-        const tarray = parsed.type.includes('*')?['*']:parsed.type;
 
-        for (const targetType of tarray) {
-          if (!(targetType in rangeObject) && targetType !== '*') continue;
-
-          for (const {name,range,modifiers} of targetType === '*'?rangeObject._all:rangeObject[targetType]) {
-            const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
-
-            if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(a => a.every(m => !modifiers.includes(m)))) matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity});
-          }
+    const tokenOnlyMatch = (parsed:ParsedSelector) => {
+      const tarray = parsed.type.includes('*')?['*']:parsed.type;
+      const ranges = [] as Range[];
+      for (const targetType of tarray) {
+        if (!(targetType in rangeObject) && targetType !== '*') continue;
+        for (const {name,range,modifiers} of targetType === '*'?rangeObject._all:rangeObject[targetType]) {
+          const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
+          if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(a => a.every(m => !modifiers.includes(m)))) ranges.push(range);
         }
       }
+      return ranges;
+    };
+
+    for (const {selector,style,scope,colorActions,operators,complex} of rules) {
+      if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
+
+      if (complex && dom){
+        const selectorGroups = [[]] as (ParsedSelector|string)[][];
+        for (const [i,pSelect] of selector.entries()){
+
+          const currentGroup = selectorGroups.at(-1)!;
+          const nextOperator = operators[i] as string|undefined;
+          const payload = [pSelect] as (ParsedSelector|string)[];
+          if (nextOperator && nextOperator === ',') selectorGroups.push([]);
+          else if (nextOperator) payload.push(nextOperator);
+          currentGroup.push(...payload);
+        }
+        const finalSelectors = [] as string[];
+        const finalParsed = [] as ParsedSelector[];
+        for (const group of selectorGroups){
+          let accumulator = ['div'] as string[];
+          for (const element of group){
+            accumulator = typeof element === 'string' ? accumulator.map(s => `${s} ${element}`) : dom.selectorToQuery(element,accumulator,element.regexp?tokenOnlyMatch(element):[]);
+          }
+          finalSelectors.push(accumulator.join(', '));
+          finalParsed.push(group.filter(v => typeof v !== 'string').at(-1)!);
+        }
+
+        for (const [i,v] of finalSelectors.map(fn => dom.rangesFromQuery(fn)).entries()) v.map(range => matched.push({range,style,colorActions,pseudo:finalParsed[i].pseudo,specificity:finalParsed[i].specificity}));
+      }
+      else for (const parsed of selector) tokenOnlyMatch(parsed).map(range => matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity}));
     }
 
     for (const current of matched){
