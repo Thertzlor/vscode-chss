@@ -24,6 +24,8 @@ export class DomSimulator{
   ){
     const lang = stringContent.languageId;
     const todex = new Set<number>();
+
+    //For manual discovery of properties.
     const accessors =new Set(
       lang === 'typescript'?['.','?.','!.']:
       lang === 'javascript'?['.','?.']:
@@ -33,7 +35,7 @@ export class DomSimulator{
     const hasFields = new Set<SymbolToken>(['class','property','variable','object','parameter']);
     const isField = new Set<SymbolToken>(['property','method']);
     const collapsable = new Set<SymbolToken>(['variable','constant']);
-    const {_all:all,_byRange:byRange} = tokens;
+    const {all,byRange} = tokens;
     const processedRanges = new Map<string,[HTMLDivElement,Range]>();
     const sortChildren = (node:HTMLElement) => {
       for (const c of node.children.sort((a:HTMLDivElement,b:HTMLDivElement) => processedRanges.get(a.getAttribute('data-namerange'))![1].start.compareTo(processedRanges.get(b.getAttribute('data-namerange'))![1].start))) node.appendChild(c);
@@ -77,25 +79,14 @@ export class DomSimulator{
       }
     };
     for (const e of symbols.sort(symSort)) encodeNode(e,document.body as any as HTMLElement);
-    for (const a of all){
-      if (processedRanges.has(rangeToIdentifier(a.range))) continue;
-      encodeNode(tokenToSymbol(a),document.body,a,undefined,true);
-    }
+    for (const a of all) !processedRanges.has(rangeToIdentifier(a.range)) && encodeNode(tokenToSymbol(a),document.body,a,undefined,true);
     sortChildren(document.body);
   }
 
   public rangesFromQuery(selector:string,full=false){
     if (this.queryMap.has(selector)) return this.queryMap.get(selector)!;
-    try {const ranges = this.document.querySelectorAll(selector).map((n:HTMLElement) => identifierToRange(n.getAttribute(`data-${full?'fullrange':'namerange'}`)));
-      this.queryMap.set(selector, ranges);
-      return ranges;} catch {
-      return [];
-    }
-  }
-
-  public getSelectionAccuracy(sel:ParsedSelector){
-    if (sel.regexp) return false;
-    return true;
+    try {return ((ranges = this.document.querySelectorAll(selector).map((n:HTMLElement) => identifierToRange(n.getAttribute(`data-${full?'fullrange':'namerange'}`)))) => (this.queryMap.set(selector, ranges),ranges))();}
+    catch {return [];}
   }
 
   public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexRanges?:Range[],notRanges?:Range[]){
@@ -112,14 +103,12 @@ export class DomSimulator{
   }
 
   public getHtml(){
-    const styled = /*html*/`
+    return /*html*/`
       <!DOCTYPE html> <html><head> <style> html,body{background:white; width:100%; text-align:center; padding: 1em 0; font-size:0.95em } div {border-radius:.3em; margin: .5em; padding: .2em; width: 90%; border:.15em solid rgba(0, 0, 0, 0.150); background: rgba(0, 0, 0, 0.050); min-height: 1em; display:inline-block; color:#a52634; text-align:center; position:relative } div::after{content: "[" attr(class) "]"; display:block; position:absolute; top: .2em; left:.2em} div::before { display: block; font-weight: bold; content: attr(data-name); } </style> </head> <body> ${this.document.body.innerHTML} </body> </html>
     `;
-    return styled;
   }
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
-    const syms:DocumentSymbol[] = await commands.executeCommand('vscode.executeDocumentSymbolProvider',target);
-    return new DomSimulator(syms,tokens,target,text);
+    return new DomSimulator(await commands.executeCommand('vscode.executeDocumentSymbolProvider',target),tokens,target,text);
   }
 }

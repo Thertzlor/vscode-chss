@@ -62,9 +62,9 @@ import {rangeToIdentifier, type RangeIdentifier} from './helperFunctions';
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
 export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string,index:number};
-export type TokenCollection = Record<string, Set<TokenData>> & {_byRange:Map<RangeIdentifier,TokenData|undefined>,_all:Set<TokenData>};
+export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<RangeIdentifier,TokenData|undefined>,all:Set<TokenData>};
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
-  const accumulator= {_byRange:new Map<string,TokenData>(),_all:new Set<TokenData>()} as TokenCollection;
+  const collection:TokenCollection= {byRange:new Map(),all:new Set(),byType:new Map()};
   const recordSize = 5;
 
   let line = 0;
@@ -84,13 +84,13 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const range = new vscode.Range(line, column, line, column + length);
     const name = editor.document.getText(range);
 
-    if (!(kind in accumulator))accumulator[kind]=new Set();
+    if (!collection.byType.has(kind))collection.byType.set(kind,new Set());
     const t = {range, name, modifiers, type: kind,index};
     index++;
-    accumulator._all.add(t);
-    accumulator._byRange.set(rangeToIdentifier(range),t);
-    accumulator[kind].add(t);
+    collection.all.add(t);
+    collection.byRange.set(rangeToIdentifier(range),t);
+    collection.byType.get(kind)!.add(t);
   }
 
-  return accumulator;
+  return collection;
 }
