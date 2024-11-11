@@ -7,7 +7,7 @@ import type {RangeIdentifier} from './helperFunctions';
 import {DomSimulator} from './domSimulator';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
-export interface ParsedSelector {type:string[], specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo}
+export interface ParsedSelector {type:string[], specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo,notSelectors?:ParsedSelector[]}
 interface ChssRule {selector:ParsedSelector[], operators:string[], complex?:boolean, style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
 interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>}
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
@@ -18,7 +18,13 @@ type Specifity = [_id:number,_class:number,_type:number];
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
 const pseudos = ['before', 'after', 'light', 'dark'] as const;
 
+
 const sumSpecificity = ([a1,b1,c1]:Specifity,[a2,b2,c2]:Specifity):Specifity => [a1+a2,b1+b2,c1+c2];
+
+const rightModifiers = (modGroups:string[][],modifiers:string[]) => !modGroups.length || modGroups.every(group => !group.length || (group.includes('none')? !modifiers.length: modifiers.some(m => group.includes(m))));
+
+const matchName = (name:string,type:MatchType,val:string,reg?:RegExp) => (reg?reg.test(name):!!name[type](val));
+
 
 export class ChssParser{
   constructor(
@@ -37,6 +43,9 @@ export class ChssParser{
     const invalid = {specificity:[-1,-1,-1] as Specifity, name:'', type:[''],modifiers:[]};
     const pseudo = pseudos.find(b => rawSelector.includes(`::${b}`));
     const selector = pseudo?rawSelector.replaceAll(`::${pseudo}`, ''):rawSelector;
+
+    const nots = [] as string[];
+
 
     if (selector === '*') return {specificity:sumSpecificity(base,[0,0,0]), name:'', type:['*'],modifiers:[],pseudo};
     if (/^\w+$/.test(selector)) return {specificity:sumSpecificity(base,[1,0,0]), name:selector, type:['*'],modifiers:[],pseudo}; // name selector for all types: name
@@ -187,7 +196,6 @@ export class ChssParser{
     return res;
   }
 
-  private matchName(name:string,type:MatchType,val:string,reg?:RegExp){return reg?reg.test(name):!!name[type](val);}
 
   public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
     const matched:ProtoChssMatch[] = [];
@@ -195,6 +203,7 @@ export class ChssParser{
     // We only need the DOM for complex rules
     const dom = doc && rules.some(r => r.complex)? await DomSimulator.init(doc.uri, rangeObject,doc):undefined;
     if (dom){
+      console.log('I have a dom');
       // const wbv = window.createWebviewPanel('dummyDom', 'Your Dom', {preserveFocus:true,viewColumn:ViewColumn.Beside});
       // wbv.webview.html = dom.getHtml();
       // for (const r of rules.flatMap(s => s.selector)) console.log(dom.selectorToQuery(r));
@@ -207,7 +216,7 @@ export class ChssParser{
         if (!(targetType in rangeObject) && targetType !== '*') continue;
         for (const {name,range,modifiers} of targetType === '*'?rangeObject._all:rangeObject[targetType]) {
           const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
-          if ((!sName || sName === tName || (parsed.match && this.matchName(tName,parsed.match, sName,parsed.regexp))) && !parsed.modifiers.some(a => a.every(m => !modifiers.includes(m)))) ranges.push(range);
+          if ((!sName || sName === tName || (parsed.match && matchName(tName,parsed.match, sName,parsed.regexp))) && rightModifiers(parsed.modifiers,modifiers)) ranges.push(range);
         }
       }
       return ranges;
@@ -219,8 +228,6 @@ export class ChssParser{
       if (complex && dom){
         const selectorGroups = [[]] as (ParsedSelector|string)[][];
         for (const [i,pSelect] of selector.entries()){
-          console.log(pSelect);
-
           const currentGroup = selectorGroups.at(-1)!;
           const nextOperator = operators[i] as string|undefined;
           const payload = [pSelect] as (ParsedSelector|string)[];
