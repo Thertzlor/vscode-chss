@@ -26,6 +26,7 @@ export class DomSimulator{
     const accessors = new Set(['.']);
     const hasFields = new Set<SymbolToken>(['class','property','variable','object','parameter']);
     const isField = new Set<SymbolToken>(['property','method']);
+    const collapsable = new Set<SymbolToken>(['variable','constant']);
     const {_all:all,_byRange:byRange} = tokens;
     const processedRanges = new Map<string,[HTMLDivElement,Range]>();
     const sortChildren = (node:HTMLElement) => {
@@ -56,7 +57,7 @@ export class DomSimulator{
         let currentData:SymbolData|undefined;
         for (const tok of all) {
           if (!top && fullRange.start.isAfterOrEqual(tok.range.end)) continue;
-          if (!top && (sym.children.length?fullRange:range).end.isBeforeOrEqual(tok.range.start)) break;
+          if (!top && (sym.children.length || !collapsable.has(nodeType)?fullRange:range).end.isBeforeOrEqual(tok.range.start)) break;
           if (todex.has(tok.index)) continue;
           const sy = tokenToSymbol(tok);
           const sData:SymbolData = {tk:tok,sy,tp:getNodeType(sy,tok)};
@@ -91,7 +92,7 @@ export class DomSimulator{
     return true;
   }
 
-  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=['div'],regexRanges?:Range[]){
+  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexRanges?:Range[]){
     const finalTypes = type.filter(f => f!=='*');
     let selectorStrings = prevSelectors;
     if (match === 'match' && regexRanges?.length)selectorStrings = regexRanges.flatMap(r => selectorStrings.map(s => `${s}[data-namerange="${rangeToIdentifier(r)}"]`));
@@ -99,6 +100,7 @@ export class DomSimulator{
     else if (name && name !== '*') selectorStrings = selectorStrings.map(s => `${s}[data-name="${name}"]`);
     if (modifiers.length)selectorStrings = modifiers.flatMap(m => selectorStrings.map(s => `${s}.${m.join('.')}`));
     if (finalTypes.length)selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}.${t}`));
+    else if (finalTypes.length !== type.length && !name)selectorStrings = selectorStrings.map(s => `${s}[data-fullrange]`);
     return selectorStrings;
   }
 
@@ -111,6 +113,7 @@ export class DomSimulator{
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
     const syms:DocumentSymbol[] = await commands.executeCommand('vscode.executeDocumentSymbolProvider',target);
+    console.log(syms);
     return new DomSimulator(syms,tokens,target,text);
   }
 }

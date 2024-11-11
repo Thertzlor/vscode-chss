@@ -120,7 +120,7 @@ export class ChssParser{
           currentScope = v.match(/.*\((.*)\)$/)?.[1].trim().replace(/^"|"$/,'').replaceAll('\\','/') || '???';
           continue;
         }
-        const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+)*|<[^>]+?>|(?::\w+)+|\[[^]*?]+(?::+\w+)*/g;
+        const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+)*|<[^>]+?>|(?::\w+)+|\[[^]*?]+(?::+\w+)*|\*(?:$|\s)/g;
         const baseVal:Specifity = currentScope?[1,0,0]:[0,0,0];
         const selectorMatches = [];
         const operators = [];
@@ -219,6 +219,7 @@ export class ChssParser{
       if (complex && dom){
         const selectorGroups = [[]] as (ParsedSelector|string)[][];
         for (const [i,pSelect] of selector.entries()){
+          console.log(pSelect);
 
           const currentGroup = selectorGroups.at(-1)!;
           const nextOperator = operators[i] as string|undefined;
@@ -239,8 +240,7 @@ export class ChssParser{
         }
 
         for (const [i,v] of finalSelectors.map(fn => dom.rangesFromQuery(fn)).entries()) v.map(range => matched.push({range,style,colorActions,pseudo:finalParsed[i].pseudo,specificity:finalParsed[i].specificity}));
-      }
-      else for (const parsed of selector) tokenOnlyMatch(parsed).map(range => matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity}));
+      } else for (const parsed of selector) tokenOnlyMatch(parsed).map(range => matched.push({range,style,colorActions,pseudo:parsed.pseudo,specificity:parsed.specificity}));
     }
 
     for (const current of matched){
