@@ -98,7 +98,7 @@ export class DomSimulator{
     return true;
   }
 
-  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexRanges?:Range[]){
+  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexRanges?:Range[],notRanges?:Range[]){
     const finalTypes = type.filter(f => f!=='*');
     let selectorStrings = prevSelectors;
     if (match === 'match' && regexRanges?.length)selectorStrings = regexRanges.flatMap(r => selectorStrings.map(s => `${s}[data-namerange="${rangeToIdentifier(r)}"]`));
@@ -106,6 +106,7 @@ export class DomSimulator{
     else if (name && name !== '*') selectorStrings = selectorStrings.map(s => `${s}[data-name="${name}"]`);
     if (modifiers.length)selectorStrings = modifiers.flatMap(m => selectorStrings.map(s => `${s}.${m.join('.')}`));
     if (finalTypes.length)selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}.${t}`));
+    if (notRanges?.length) selectorStrings = selectorStrings.map(s => `${s}:not(${notRanges.map(r => `[data-namerange="${rangeToIdentifier(r)}"]`).join(',')})`);
     else if (finalTypes.length !== type.length && !name)selectorStrings = selectorStrings.map(s => `${s}[data-fullrange]`);
     return selectorStrings;
   }

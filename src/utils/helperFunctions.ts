@@ -2,7 +2,7 @@ import {Range} from 'vscode';
 import type {Pseudo} from './chssParser';
 export type RangeIdentifier = ReturnType<typeof rangeToIdentifier>;
 
-const rts = new Map<Range,string>();
+const rts = new WeakMap<Range,string>();
 const str = new Map<string,Range>();
 
 export const rangeToIdentifier = (r:Range,pseudo?:Pseudo) => (!pseudo && rts.has(r)?rts.get(r)!:(({start,end} = r) => ((s=`${start.line}|${start.character}|${end.line}|${end.character}${pseudo?`|${pseudo}` as const:'' as const}` as const) => (!pseudo && rts.set(r,s) , s))())());
