@@ -104,7 +104,7 @@ export class DomSimulator{
 
   public getHtml(){
     const styled = /*html*/`
-      <!DOCTYPE html> <html><head> <style> html,body{ width:100%; text-align:center } .array { background: yellow; } .variable { background: rgb(205, 63, 63); } .constant { background: rgb(126, 41, 41); } .class { background: rgb(0, 128, 124); } .object { background: green; } .property { background: rgb(144, 179, 103); } .function { background: blue; } .method { background: rgb(29, 155, 155); } .parameter { background: orange; } .constructor { background: purple; } .type { background: rgb(239, 239, 148); } .typeParameter { background: rgb(239, 199, 148); } .interface { background: rgb(239, 210, 148); } div { margin: .5em; padding: .2em; border: 1px solid black; width: 90%; background: grey; min-height: 1em; display:inline-block; color:black; text-align:center } div::before { display: block; font-weight: bold; content: attr(data-name); } </style> </head> <body> ${this.document.body.innerHTML} </body> </html>
+      <!DOCTYPE html> <html><head> <style> html,body{background:white; width:100%; text-align:center; padding: 1em 0; font-size:0.95em } div {border-radius:.3em; margin: .5em; padding: .2em; width: 90%; border:.15em solid rgba(0, 0, 0, 0.150); background: rgba(0, 0, 0, 0.050); min-height: 1em; display:inline-block; color:#a52634; text-align:center; position:relative } div::after{content: "[" attr(class) "]"; display:block; position:absolute; top: .2em; left:.2em} div::before { display: block; font-weight: bold; content: attr(data-name); } </style> </head> <body> ${this.document.body.innerHTML} </body> </html>
     `;
     return styled;
   }
