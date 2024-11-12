@@ -1,9 +1,7 @@
-import {Range ,languages, RelativePattern,window,ViewColumn} from 'vscode';
+import {Range ,languages, RelativePattern,window,ViewColumn, workspace} from 'vscode';
 import color from 'tinycolor2';
-import {rangeToIdentifier} from './helperFunctions';
-import type {TextDocument, Uri} from 'vscode';
+import {TextDocument, Uri} from 'vscode';
 import type {TokenCollection} from './rangesByName';
-import type {RangeIdentifier} from './helperFunctions';
 import {DomSimulator} from './domSimulator';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
@@ -33,7 +31,8 @@ const isCompund = (selectors:ParsedSelector[]) => selectors.some(s => s.operator
 export class ChssParser{
   constructor(
     private readonly baseUri?:Uri,
-    private readonly colorMap= new Map<string,string>()
+    private readonly colorMap= new Map<string,string>(),
+    private readonly doms = new Map<string,DomSimulator>()
   ){}
 
   private moreSpecific([i1,c1,t1]:Specifity,[i2,c2,t2]:Specifity) {
@@ -247,14 +246,8 @@ export class ChssParser{
     }
   }
 
-  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument,domReused?:DomSimulator):Promise<MiniMatch[]>{
-    const dom = doc && complex? domReused ?? await DomSimulator.init(doc.uri, rangeObject,doc):undefined;
-    if (dom){
-      // console.log('I have a dom');
-      // const wbv = window.createWebviewPanel('dummyDom', 'Your Dom', {preserveFocus:true,viewColumn:ViewColumn.Beside});
-      // wbv.webview.html = dom.getHtml();
-      // for (const r of rules.flatMap(s => s.selector)) console.log(dom.selectorToQuery(r));
-    }
+  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument):Promise<MiniMatch[]>{
+    if (doc && complex &&!this.doms.has(doc.uri.toString())) this.doms.set(doc.uri.toString(), await DomSimulator.init(doc.uri, rangeObject,doc));
 
     const tokenOnlyMatch = async(parsed:ParsedSelector):Promise<MatchPair> => {
       const tarray = parsed.type.includes('*')?['*']:parsed.type;
@@ -275,6 +268,7 @@ export class ChssParser{
 
     const processWithTokens = (selects:ParsedSelector[]) => Promise.all(selects.map(parsed => tokenOnlyMatch(parsed).then(([r,o]) => [r,parsed.specificity,o,parsed.pseudo] as MiniMatch)));
     const processWithDom = async(selects:ParsedSelector[]) => {
+      const dom = doc? this.doms.get(doc.uri.toString()):undefined;
       if (!dom) return [];
       const selectorGroups = [[]] as (ParsedSelector|string)[][];
       for (const pSelect of selects){
@@ -293,31 +287,32 @@ export class ChssParser{
           if (typeof element === 'string'){
             accumulator = accumulator.map(s => `${s} ${element}`);
           } else {
-            const antiRanges = await this.getAntiMatches(element, rangeObject, insensitive, doc, dom);
+            const antiRanges = await this.getAntiMatches(element, rangeObject, insensitive, doc);
             accumulator = dom.selectorToQuery(element,accumulator,element.regexp?(await tokenOnlyMatch(element))[1]:undefined,antiRanges?.[1]);
           }
         }
         finalSelectors.push(accumulator.join(', '));
         finalParsed.push(group.filter(v => typeof v !== 'string').at(-1)!);
       }
-
       const tunre = finalSelectors.map((fn, i) => ((mp = dom.matchesFromQuery(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as MiniMatch)());
       return tunre;
     };
 
-    if (complex && dom) return processWithDom(selectors);
+    if (complex && this.doms.has(doc?.uri.toString() ?? '')) return processWithDom(selectors);
     return processWithTokens(selectors);
   }
 
-  private async getAntiMatches(element:ParsedSelector, rangeObject:TokenCollection, insensitive?:boolean, doc?:TextDocument, dom?:DomSimulator) {
-    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompund(sels), rangeObject, insensitive, doc, dom)))).flat().reduce<MatchPair>((p,[ranges,_,offsets]) => {
+  private async getAntiMatches(element:ParsedSelector, rangeObject:TokenCollection, insensitive?:boolean, doc?:TextDocument) {
+    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompund(sels), rangeObject, insensitive, doc)))).flat().reduce<MatchPair>((p,[ranges,_,offsets]) => {
       p[0].push(...ranges);
       p[1].push(...offsets);
       return p;
     }, [[],[]]) : undefined;
   }
 
+
   public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
+    doc && this.doms.delete(doc.uri.toString());
     const matched:ProtoChssMatch[] = [];
     const combined = new Map<string,ChssMatch>();
     // We only need the DOM for complex rules

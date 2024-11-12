@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import {hasFields, mightMissProps} from './helperFunctions';
+import {hasFields, mightMissProps, rangeToIdentifier} from './helperFunctions';
 import type {SymbolToken} from './helperFunctions';
 import {Range} from 'vscode';
 // import { tokenKinds } from '../configuration';
@@ -64,7 +64,7 @@ import {Range} from 'vscode';
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
 export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string,index:number, offset:number};
-export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<number,TokenData|undefined>,all:Set<TokenData>};
+export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<string,TokenData|undefined>,all:Set<TokenData>};
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
   const collection:TokenCollection= {byRange:new Map(),all:new Set(),byType:new Map()};
   const recordSize = 5;
@@ -93,13 +93,13 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     if (!word.length || word.trim().length !== word.length) return;
     const isMethod = word.endsWith('(');
     const end = start + word.length -(isMethod?1:0);
-    const token:TokenData = {index:idx ?? collection.all.size,modifiers:[],name:word.slice(0,isMethod?-1:undefined),type:isMethod?'method':'property',offset:start, range:
-      new Range(doc.positionAt(start),doc.positionAt(end))
+    const subRange = new Range(doc.positionAt(start),doc.positionAt(end));
+    const token:TokenData = {index:idx ?? collection.all.size,modifiers:[],name:word.slice(0,isMethod?-1:undefined),type:isMethod?'method':'property',offset:start, range:subRange
     };
 
     if (!collection.byType.has(token.type))collection.byType.set(token.type,new Set());
     collection.all.add(token);
-    collection.byRange.set(start,token);
+    collection.byRange.set(rangeToIdentifier(subRange),token);
     collection.byType.get(token.type)!.add(token);
     index++;
     return token;
@@ -128,7 +128,7 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const t = {range, name, modifiers, type: kind,index, offset};
     index++;
     collection.all.add(t);
-    collection.byRange.set(offset,t);
+    collection.byRange.set(rangeToIdentifier(range),t);
     collection.byType.get(kind)!.add(t);
   }
 

@@ -27,9 +27,8 @@ export class DomSimulator{
     private readonly document = (new DOMParser()).parseFromString('<html><head></head><body></body></html>', 'text/html'),
     private readonly queryMap = new Map<string,MatchPair>()
   ){
+    console.log('init');
     const todex = new Set<number>();
-    //For manual discovery of properties.
-
     const collapsable = new Set<SymbolToken>(['variable','constant']);
     const {all,byRange} = tokens;
     const processedRanges = new Map<string,[HTMLDivElement,Range]>();
@@ -39,12 +38,12 @@ export class DomSimulator{
 
     const encodeNode = (sym:DocSym,parent:HTMLElement,token?:TokenData,manualType?:SymbolToken,top=false) => {
       const noNest = new Set(['package','keyword','other']);
-      const range = sym.selectionRange;
       const fullRange = sym.range;
+      const range = sym.name.startsWith('<')?new Range(fullRange.start,fullRange.start):sym.selectionRange;
       const rangeIdent = rangeToIdentifier(range);
       if (processedRanges.has(rangeIdent)) return;
       const rangeIdentFull = rangeToIdentifier(fullRange);
-      const semant = token ?? byRange.get(stringContent.offsetAt(range.start));
+      const semant = token ?? byRange.get(rangeToIdentifier(range));
       const nodeType = manualType ?? getNodeType(sym,semant);
       if (noNest.has(nodeType)) for (const cc of sym.children.sort(symSort)) encodeNode(cc,parent);
       else {
@@ -96,7 +95,6 @@ export class DomSimulator{
     if (finalTypes.length)selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}.${t}`));
     if (notRanges?.length) selectorStrings = selectorStrings.map(s => `${s}:not(${notRanges.map(n => `#o${n}`).join(',')})`);
     else if (finalTypes.length !== type.length && !name)selectorStrings = selectorStrings.map(s => `${s}[data-fullrange]`);
-    console.log(selectorStrings);
     return selectorStrings;
   }
 
