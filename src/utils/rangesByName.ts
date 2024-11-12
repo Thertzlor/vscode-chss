@@ -74,8 +74,16 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
   const doc = editor.document;
   const fullText = doc.getText();
 
-  const generateMissingProperty = (offset?:number,idx?:number) => {
-    const lasToken = collection.all.values().drop((idx??collection.all.size)-1).next().value;
+  const addToken = (t:TokenData) => {
+    if (!collection.byType.has(t.type))collection.byType.set(t.type,new Set());
+    collection.all.add(t);
+    collection.byRange.set(rangeToIdentifier(t.range),t);
+    collection.byType.get(t.type)!.add(t);
+    index++;
+  };
+
+  const generateMissingProperty = (offset?:number,idx?:number,tok?:TokenData) => {
+    const lasToken = tok ?? collection.all.values().drop((idx??collection.all.size)-1).next().value;
     if (!lasToken || lasToken.modifiers.includes('declaration') || !hasFields.has(lasToken.type.toLowerCase() as SymbolToken)) return;
     const currentOffset = offset??fullText.length;
     if (currentOffset-lasToken.offset < 3) return;
@@ -96,14 +104,16 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const subRange = new Range(doc.positionAt(start),doc.positionAt(end));
     const token:TokenData = {index:idx ?? collection.all.size,modifiers:[],name:word.slice(0,isMethod?-1:undefined),type:isMethod?'method':'property',offset:start, range:subRange
     };
-
-    if (!collection.byType.has(token.type))collection.byType.set(token.type,new Set());
-    collection.all.add(token);
-    collection.byRange.set(rangeToIdentifier(subRange),token);
-    collection.byType.get(token.type)!.add(token);
-    index++;
+    addToken(token);
     return token;
   };
+
+  const getMissingProps = (o?:number,i?:number) => {
+    if (!collection.all.size || !mightMissProps.has(doc.languageId)) return;
+    let propator = generateMissingProperty(o,i);
+    while (propator && hasFields.has(propator.type.toLowerCase() as any)) propator = generateMissingProperty(o,i,propator);
+  };
+
   for (let i = 0; i < data.data.length; i += recordSize) {
     const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
     const kind = legend.tokenTypes[kindIndex];
@@ -116,21 +126,12 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const modifiers = legend.tokenModifiers.filter(m => modifierIndex & modifierFlags[m]);
     const range = new vscode.Range(line, column, line, column + length);
     const name = doc.getText(range);
-
-    if (!collection.byType.has(kind))collection.byType.set(kind,new Set());
     const offset=doc.offsetAt(range.start);
 
-    if (collection.all.size && mightMissProps.has(doc.languageId)){
-      let propator = generateMissingProperty(offset,index);
-      while (propator && hasFields.has(propator.type.toLowerCase() as any)) propator = generateMissingProperty(propator.offset,propator.index);
-    }
-
-    const t = {range, name, modifiers, type: kind,index, offset};
-    index++;
-    collection.all.add(t);
-    collection.byRange.set(rangeToIdentifier(range),t);
-    collection.byType.get(kind)!.add(t);
+    getMissingProps(offset,index);
+    addToken({range, name, modifiers, type: kind,index, offset});
   }
+  getMissingProps();
 
   return collection;
 }
