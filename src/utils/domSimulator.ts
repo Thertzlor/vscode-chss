@@ -1,14 +1,18 @@
 import {commands,SymbolKind,Range} from 'vscode';
 import {DOMParser} from 'linkedom';
+import {rangeToIdentifier,identifierToRange, accessors, isField, hasFields} from './helperFunctions';
 import type {DocumentSymbol,Uri, TextDocument} from 'vscode';
 import type {HTMLElement,HTMLDivElement} from 'linkedom';
 import type {TokenCollection, TokenData} from './rangesByName';
-import {rangeToIdentifier,identifierToRange} from './helperFunctions';
-import type {ParsedSelector} from './chssParser';
+import type {SymbolToken} from './helperFunctions';
+import type {MatchPair, ParsedSelector} from './chssParser';
 
 
-type SymbolToken = Lowercase<keyof typeof SymbolKind>|'parameter'|'type';
 type SymbolData = {tk:TokenData,sy:DocumentSymbol,tp:SymbolToken};
+
+type DocumentSymbolPlus = DocumentSymbol & {offset:number};
+
+type DocSym = DocumentSymbol|DocumentSymbolPlus;
 
 const symSort = (a:{range:Range},b:{range:Range}) => a.range.start.compareTo(b.range.start);
 const tokenToSymbol = ({range,name}:TokenData):DocumentSymbol => ({range,children:[],selectionRange:range,name,detail:'generated',kind:SymbolKind.Variable});
@@ -18,22 +22,14 @@ export class DomSimulator{
     symbols:DocumentSymbol[],
     tokens:TokenCollection,
     public readonly uri:Uri,
-    stringContent:TextDocument,
+    readonly stringContent:TextDocument,
+    readonly lang = stringContent.languageId,
     private readonly document = (new DOMParser()).parseFromString('<html><head></head><body></body></html>', 'text/html'),
-    private readonly queryMap = new Map<string,Range[]>()
+    private readonly queryMap = new Map<string,MatchPair>()
   ){
-    const lang = stringContent.languageId;
     const todex = new Set<number>();
-
     //For manual discovery of properties.
-    const accessors =new Set(
-      lang === 'typescript'?['.','?.','!.']:
-      lang === 'javascript'?['.','?.']:
-      lang === 'lua'?['.',':']:
-      ['.']
-    );
-    const hasFields = new Set<SymbolToken>(['class','property','variable','object','parameter']);
-    const isField = new Set<SymbolToken>(['property','method']);
+
     const collapsable = new Set<SymbolToken>(['variable','constant']);
     const {all,byRange} = tokens;
     const processedRanges = new Map<string,[HTMLDivElement,Range]>();
@@ -41,19 +37,20 @@ export class DomSimulator{
       for (const c of node.children.sort((a:HTMLDivElement,b:HTMLDivElement) => processedRanges.get(a.getAttribute('data-namerange'))![1].start.compareTo(processedRanges.get(b.getAttribute('data-namerange'))![1].start))) node.appendChild(c);
     };
 
-    const encodeNode = (sym:DocumentSymbol,parent:HTMLElement,token?:TokenData,manualType?:SymbolToken,top=false) => {
+    const encodeNode = (sym:DocSym,parent:HTMLElement,token?:TokenData,manualType?:SymbolToken,top=false) => {
       const noNest = new Set(['package','keyword','other']);
       const range = sym.selectionRange;
       const fullRange = sym.range;
       const rangeIdent = rangeToIdentifier(range);
       if (processedRanges.has(rangeIdent)) return;
       const rangeIdentFull = rangeToIdentifier(fullRange);
-      const semant = token ?? byRange.get(rangeIdent);
+      const semant = token ?? byRange.get(stringContent.offsetAt(range.start));
       const nodeType = manualType ?? getNodeType(sym,semant);
       if (noNest.has(nodeType)) for (const cc of sym.children.sort(symSort)) encodeNode(cc,parent);
       else {
         const current = parent.appendChild(document.createElement('div')) as HTMLDivElement;
         processedRanges.set(rangeIdent,[current,range]);
+        current.id = `o${semant?.offset ?? stringContent.offsetAt(range.start)}`;
         current.setAttribute('data-namerange', rangeIdent);
         current.setAttribute('data-fullrange', rangeIdentFull);
         current.setAttribute('data-name', sym.name);
@@ -69,7 +66,7 @@ export class DomSimulator{
           if (todex.has(tok.index)) continue;
           const sy = tokenToSymbol(tok);
           const sData:SymbolData = {tk:tok,sy,tp:getNodeType(sy,tok)};
-          if (currentData && isField.has(sData.tp) && hasFields.has(currentData.tp) && accessors.has(stringContent.getText(new Range(currentData.tk.range.end,sData.tk.range.start)).trim())){
+          if (currentData && isField.has(sData.tp) && hasFields.has(currentData.tp) && accessors.get(lang)?.has(stringContent.getText(new Range(currentData.tk.range.end,sData.tk.range.start)).trim())){
             currentData.sy.children.push(sData.sy);
           } else tokenSymbols.add(sData);
           currentData = hasFields.has(sData.tp)? sData:undefined;
@@ -83,22 +80,23 @@ export class DomSimulator{
     sortChildren(document.body);
   }
 
-  public rangesFromQuery(selector:string,full=false){
+  public matchesFromQuery(selector:string,full=false):MatchPair{
     if (this.queryMap.has(selector)) return this.queryMap.get(selector)!;
-    try {return ((ranges = this.document.querySelectorAll(selector).map((n:HTMLElement) => identifierToRange(n.getAttribute(`data-${full?'fullrange':'namerange'}`)))) => (this.queryMap.set(selector, ranges),ranges))();}
-    catch {return [];}
+    try {return ((pair = this.document.querySelectorAll(selector).reduce<MatchPair>((p,c:HTMLDivElement) => (p[0].push(identifierToRange(c.getAttribute(full?'data-fullrange':'data-namerange'))),p[1].push(parseInt(c.id.slice(1),10)),p),[[],[]])) => (this.queryMap.set(selector, pair),pair))();}
+    catch {return [[],[]];}
   }
 
-  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexRanges?:Range[],notRanges?:Range[]){
+  public selectorToQuery({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[]){
     const finalTypes = type.filter(f => f!=='*');
     let selectorStrings = prevSelectors;
-    if (match === 'match' && regexRanges?.length)selectorStrings = regexRanges.flatMap(r => selectorStrings.map(s => `${s}[data-namerange="${rangeToIdentifier(r)}"]`));
+    if (match === 'match' && regexOffsets?.length)selectorStrings = selectorStrings.map(s => `${s}:not(:not(${regexOffsets.map(n => `#o${n}`).join(',')}))`);
     else if (match &&match !== 'match')selectorStrings = selectorStrings.map(s => `${s}[data-namerange${match === 'includes'?'*':match === 'startsWith'?'^':'$'}="${name}"]`);
     else if (name && name !== '*') selectorStrings = selectorStrings.map(s => `${s}[data-name="${name}"]`);
     if (modifiers.length)selectorStrings = modifiers.flatMap(m => selectorStrings.map(s => `${s}.${m.join('.')}`));
     if (finalTypes.length)selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}.${t}`));
-    if (notRanges?.length) selectorStrings = selectorStrings.map(s => `${s}:not(${notRanges.map(r => `[data-namerange="${rangeToIdentifier(r)}"]`).join(',')})`);
+    if (notRanges?.length) selectorStrings = selectorStrings.map(s => `${s}:not(${notRanges.map(n => `#o${n}`).join(',')})`);
     else if (finalTypes.length !== type.length && !name)selectorStrings = selectorStrings.map(s => `${s}[data-fullrange]`);
+    console.log(selectorStrings);
     return selectorStrings;
   }
 

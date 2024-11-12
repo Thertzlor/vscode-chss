@@ -9,12 +9,14 @@ import {DomSimulator} from './domSimulator';
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 export interface ParsedSelector {type:string[], operator?:string, invalid?:boolean, specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo,notSelectors:ParsedSelector[][]}
 interface ChssRule {selectors:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
-interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>}
+interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>,offset:number}
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 export type Pseudo = typeof pseudos[number];
 type ColorAction = typeof colorMods[number];
 
-type MiniMatch = [ranges:Range[],spec:Specifity,pseudo?:Pseudo];
+type MiniMatch = [ranges:Range[],spec:Specifity,offs:number[],pseudo?:Pseudo];
+
+export type MatchPair = [Range[],number[]];
 type Specifity = [_id:number,_class:number,_type:number];
 
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
@@ -88,9 +90,9 @@ export class ChssParser{
       const matchSpecs = {match:4,startsWith:3,endsWith:3,includes:2};
       const value = val || matcher;
 
-      if (mType === 'match' && !value.includes('*') && !/^"\/.+\/i?"$/.test(value)) return invalid;
+      if (mType === 'match' && !value.includes('*') && !/^\/.+\/i?$/.test(value)) return invalid;
       const insense = value.slice(0,-1).endsWith('/i');
-      const regexp=mType === 'match'?new RegExp(value.startsWith('"') && value.endsWith('"')?value.slice(2,insense?-3:-2):`^${value.replace('*','.*')}$`,insense && value.startsWith('"')?'i':undefined):undefined;
+      const regexp=mType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,insense?-2:-1):`^${value.replace('*','.*')}$`,insense && value.startsWith('"')?'i':undefined):undefined;
 
       let manualType = rawType;
 
@@ -98,7 +100,6 @@ export class ChssParser{
 
       const {type=['*'],modifiers=[],specificity:[id,cl,ty]=[0,0,0]} = rawType? this.parseSelector(manualType,base):{};
       if (id === -1) return invalid;
-
       return {specificity:[id,cl+matchSpecs[mType],ty], name:value, type,modifiers,regexp,match:mType,pseudo,notSelectors,operator};
     }
     if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:sumSpecificity(base,[0,1,0]), name:'', type:selector.slice(1,-1).split('/').map(t => t.trim()),modifiers:[],pseudo,notSelectors,operator}; // general type: [variable]
@@ -246,7 +247,7 @@ export class ChssParser{
     }
   }
 
-  private async selectorsToRanges(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument,domReused?:DomSimulator):Promise<MiniMatch[]>{
+  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument,domReused?:DomSimulator):Promise<MiniMatch[]>{
     const dom = doc && complex? domReused ?? await DomSimulator.init(doc.uri, rangeObject,doc):undefined;
     if (dom){
       // console.log('I have a dom');
@@ -255,21 +256,24 @@ export class ChssParser{
       // for (const r of rules.flatMap(s => s.selector)) console.log(dom.selectorToQuery(r));
     }
 
-    const tokenOnlyMatch = async(parsed:ParsedSelector) => {
+    const tokenOnlyMatch = async(parsed:ParsedSelector):Promise<MatchPair> => {
       const tarray = parsed.type.includes('*')?['*']:parsed.type;
-      const ranges = [] as Range[];
-      const antiRanges = await this.getAntiRanges(parsed, rangeObject, insensitive, doc) ?? [];
+      const matches = [[],[]] as MatchPair;
+      const antiRanges = await this.getAntiMatches(parsed, rangeObject, insensitive, doc);
       for (const targetType of tarray) {
         if (!rangeObject.byType.has(targetType) && targetType !== '*') continue;
-        for (const {name,range,modifiers} of targetType === '*'?rangeObject.all:rangeObject.byType.get(targetType)!) {
+        for (const {name,range,modifiers,offset} of targetType === '*'?rangeObject.all:rangeObject.byType.get(targetType)!) {
           const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
-          if ((!sName || sName === tName || (parsed.match && matchName(tName,parsed.match, sName,parsed.regexp))) && rightModifiers(parsed.modifiers,modifiers) && !antiRanges.some(a => a.intersection(range))) ranges.push(range);
+          if ((!sName || sName === tName || (parsed.match && matchName(tName,parsed.match, sName,parsed.regexp))) && rightModifiers(parsed.modifiers,modifiers) && !antiRanges?.[1].includes(offset)){
+            matches[0].push(range);
+            matches[1].push(offset);
+          }
         }
       }
-      return ranges;
+      return matches;
     };
 
-    const processWithTokens = (selects:ParsedSelector[]) => Promise.all(selects.map(parsed => (tokenOnlyMatch(parsed).then(range => [range,parsed.specificity,parsed.pseudo]) as Promise<MiniMatch>)));
+    const processWithTokens = (selects:ParsedSelector[]) => Promise.all(selects.map(parsed => tokenOnlyMatch(parsed).then(([r,o]) => [r,parsed.specificity,o,parsed.pseudo] as MiniMatch)));
     const processWithDom = async(selects:ParsedSelector[]) => {
       if (!dom) return [];
       const selectorGroups = [[]] as (ParsedSelector|string)[][];
@@ -289,38 +293,43 @@ export class ChssParser{
           if (typeof element === 'string'){
             accumulator = accumulator.map(s => `${s} ${element}`);
           } else {
-            const antiRanges = await this.getAntiRanges(element, rangeObject, insensitive, doc, dom);
-            accumulator = dom.selectorToQuery(element,accumulator,element.regexp?await tokenOnlyMatch(element):undefined,antiRanges);
+            const antiRanges = await this.getAntiMatches(element, rangeObject, insensitive, doc, dom);
+            accumulator = dom.selectorToQuery(element,accumulator,element.regexp?(await tokenOnlyMatch(element))[1]:undefined,antiRanges?.[1]);
           }
         }
         finalSelectors.push(accumulator.join(', '));
         finalParsed.push(group.filter(v => typeof v !== 'string').at(-1)!);
       }
 
-      return finalSelectors.map((fn,i) => [dom.rangesFromQuery(fn),finalParsed[i].specificity,finalParsed[i].pseudo] as MiniMatch);
+      const tunre = finalSelectors.map((fn, i) => ((mp = dom.matchesFromQuery(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as MiniMatch)());
+      return tunre;
     };
 
     if (complex && dom) return processWithDom(selectors);
     return processWithTokens(selectors);
   }
 
-  private async getAntiRanges(element:ParsedSelector, rangeObject:TokenCollection, insensitive?:boolean, doc?:TextDocument, dom?:DomSimulator) {
-    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToRanges(sels, isCompund(sels), rangeObject, insensitive, doc, dom)))).flat().flatMap(m => m[0]) : undefined;
+  private async getAntiMatches(element:ParsedSelector, rangeObject:TokenCollection, insensitive?:boolean, doc?:TextDocument, dom?:DomSimulator) {
+    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompund(sels), rangeObject, insensitive, doc, dom)))).flat().reduce<MatchPair>((p,[ranges,_,offsets]) => {
+      p[0].push(...ranges);
+      p[1].push(...offsets);
+      return p;
+    }, [[],[]]) : undefined;
   }
 
   public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
     const matched:ProtoChssMatch[] = [];
-    const combined = new Map<RangeIdentifier,ChssMatch>();
+    const combined = new Map<string,ChssMatch>();
     // We only need the DOM for complex rules
 
     for (const {selectors,style,scope,colorActions} of rules) {
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
-      for (const [ranges,specificity,pseudo] of await this.selectorsToRanges(selectors, isCompund(selectors), rangeObject,insensitive,doc)) {for (const range of ranges) matched.push({range,style,colorActions,pseudo,specificity});}
+      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isCompund(selectors), rangeObject,insensitive,doc)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
     }
 
     for (const current of matched){
-      const {range, style,colorActions,pseudo} =current;
-      const rangeIdent = rangeToIdentifier(range,pseudo);
+      const {range, style,colorActions,pseudo,offset} =current;
+      const identifier = `${offset}${pseudo??''}`;
 
       // Random is a special case that does not need any preexisting color.
       for (const [name,[action]] of colorActions?.entries() ?? []) {
@@ -328,13 +337,13 @@ export class ChssParser{
         style[name] = color.random().toHex8String();
       }
 
-      if (!combined.has(rangeIdent)) combined.set(rangeIdent, current);
+      if (!combined.has(identifier)) combined.set(identifier, current);
       else {
-        const old = combined.get(rangeIdent)!;
+        const old = combined.get(identifier)!;
         const [sA, sB] = [current,old].map(s => s.specificity);
         const moreSpecific = this.moreSpecific(sB,sA);
         if (!moreSpecific && colorActions) this.applyColorActions(colorActions, old, style);
-        combined.set(rangeIdent,{range, style:moreSpecific?{...style, ...old.style}:{...old.style, ...style} , specificity:sA.map((s,i) => Math.max(s,sB[i])) as Specifity,pseudo});
+        combined.set(identifier,{range, offset, style:moreSpecific?{...style, ...old.style}:{...old.style, ...style} , specificity:sA.map((s,i) => Math.max(s,sB[i])) as Specifity,pseudo});
       }
     }
     return [...combined.values()];

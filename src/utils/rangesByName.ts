@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import {rangeToIdentifier, type RangeIdentifier} from './helperFunctions';
+import {hasFields, mightMissProps} from './helperFunctions';
+import type {SymbolToken} from './helperFunctions';
+import {Range} from 'vscode';
 // import { tokenKinds } from '../configuration';
 
 /**
@@ -61,16 +63,47 @@ import {rangeToIdentifier, type RangeIdentifier} from './helperFunctions';
  * *NOTE*: When doing edits, it is possible that multiple edits occur until VS Code decides to invoke the semantic tokens provider.
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
-export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string,index:number};
-export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<RangeIdentifier,TokenData|undefined>,all:Set<TokenData>};
+export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string,index:number, offset:number};
+export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<number,TokenData|undefined>,all:Set<TokenData>};
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
   const collection:TokenCollection= {byRange:new Map(),all:new Set(),byType:new Map()};
   const recordSize = 5;
-
   let line = 0;
   let column = 0;
   let index = 0;
+  const doc = editor.document;
+  const fullText = doc.getText();
 
+  const generateMissingProperty = (offset?:number,idx?:number) => {
+    const lasToken = collection.all.values().drop((idx??collection.all.size)-1).next().value;
+    if (!lasToken || lasToken.modifiers.includes('declaration') || !hasFields.has(lasToken.type.toLowerCase() as SymbolToken)) return;
+    const currentOffset = offset??fullText.length;
+    if (currentOffset-lasToken.offset < 3) return;
+    const propex = {
+      javascript:/^(\s*\??\.\s*)(\w+\(?)/,
+      typescript:/^(\s*?[!?]?\.\s*?)(\w+\(?)/
+    }[doc.languageId];
+    if (!propex) return;
+    const newStart = lasToken.offset+lasToken.name.length;
+    const between = fullText.slice(newStart,currentOffset);
+    const propMatch = propex.exec(between);
+    if (!propMatch) return;
+    const start = newStart+propMatch[1].length;
+    const word = propMatch[2];
+    if (!word.length || word.trim().length !== word.length) return;
+    const isMethod = word.endsWith('(');
+    const end = start + word.length -(isMethod?1:0);
+    const token:TokenData = {index:idx ?? collection.all.size,modifiers:[],name:word.slice(0,isMethod?-1:undefined),type:isMethod?'method':'property',offset:start, range:
+      new Range(doc.positionAt(start),doc.positionAt(end))
+    };
+
+    if (!collection.byType.has(token.type))collection.byType.set(token.type,new Set());
+    collection.all.add(token);
+    collection.byRange.set(start,token);
+    collection.byType.get(token.type)!.add(token);
+    index++;
+    return token;
+  };
   for (let i = 0; i < data.data.length; i += recordSize) {
     const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
     const kind = legend.tokenTypes[kindIndex];
@@ -82,13 +115,20 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const modifierFlags = ['none', ...legend.tokenModifiers].reduce((a:Record<string,number>,c,n) => (a[c]=(n-1>=2?2 << (n-2):n),a),{});
     const modifiers = legend.tokenModifiers.filter(m => modifierIndex & modifierFlags[m]);
     const range = new vscode.Range(line, column, line, column + length);
-    const name = editor.document.getText(range);
+    const name = doc.getText(range);
 
     if (!collection.byType.has(kind))collection.byType.set(kind,new Set());
-    const t = {range, name, modifiers, type: kind,index};
+    const offset=doc.offsetAt(range.start);
+
+    if (collection.all.size && mightMissProps.has(doc.languageId)){
+      let propator = generateMissingProperty(offset,index);
+      while (propator && hasFields.has(propator.type.toLowerCase() as any)) propator = generateMissingProperty(propator.offset,propator.index);
+    }
+
+    const t = {range, name, modifiers, type: kind,index, offset};
     index++;
     collection.all.add(t);
-    collection.byRange.set(rangeToIdentifier(range),t);
+    collection.byRange.set(offset,t);
     collection.byType.get(kind)!.add(t);
   }
 
