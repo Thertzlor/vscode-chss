@@ -14,11 +14,12 @@ export async function activate(context:ExtensionContext) {
   // const selector: vscode.DocumentSelector = 'custom';
   // const textmateService = new TextmateLanguageService('typescript', context);
   // const textmateTokenService = await textmateService.initTokenService();
-  const getConfig = getConfigGeneric<{realtimeCHSS:boolean,stylesheetLocation:string,fullCss:boolean,caseInsensitiveMatch:boolean}>('chss');
+  const getConfig = getConfigGeneric<{realtimeCHSS:boolean,stylesheetLocation:string,fullCss:boolean,caseInsensitiveMatch:boolean,debugView:boolean}>('chss');
   const loadFile = async(p=getConfig('stylesheetLocation')) => (p?isAbsolute(p)? Uri.file(p) : (await workspace.findFiles(p))[0] as Uri|undefined:undefined);
 
   let directUpdate = getConfig('realtimeCHSS');
   let insen = getConfig('caseInsensitiveMatch');
+  let debugMode = getConfig('debugView');
   let chssFile = await loadFile();
   console.log('imagine activating an extension');
 
@@ -58,7 +59,7 @@ export async function activate(context:ExtensionContext) {
       }
 
       const ranges = rangesByName(tokensData,legend,editor);
-      const chss = await parser.processChss(ranges,rules,textDocument,insen);
+      const chss = await parser.processChss(ranges,rules,textDocument,insen,debugMode);
 
       for (const {style,range,pseudo} of chss) {
         const stryle = JSON.stringify(style);
@@ -106,6 +107,7 @@ export async function activate(context:ExtensionContext) {
           e.affectsConfiguration('chss.realtimeCHSS') && (directUpdate = getConfig('realtimeCHSS'));
           if (e.affectsConfiguration('chss.stylesheetLocation')) {chssFile = await loadFile(); reProcess = true;}
           if (e.affectsConfiguration('chss.caseInsensitiveMatch')) {insen = getConfig('caseInsensitiveMatch'); reProcess = true;}
+          if (e.affectsConfiguration('chss.debugView')) {debugMode = getConfig('debugView');}
 
           reProcess && processAll();
         }

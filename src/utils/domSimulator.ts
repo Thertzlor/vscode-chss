@@ -27,7 +27,6 @@ export class DomSimulator{
     private readonly document = (new DOMParser()).parseFromString('<html><head></head><body></body></html>', 'text/html'),
     private readonly queryMap = new Map<string,MatchPair>()
   ){
-    console.log('init');
     const todex = new Set<number>();
     const collapsable = new Set<SymbolToken>(['variable','constant']);
     const {all,byRange} = tokens;

@@ -1,4 +1,4 @@
-import {Range ,languages, RelativePattern,window,ViewColumn, workspace} from 'vscode';
+import {Range ,languages, RelativePattern,window,ViewColumn, WebviewPanel} from 'vscode';
 import color from 'tinycolor2';
 import {TextDocument, Uri} from 'vscode';
 import type {TokenCollection} from './rangesByName';
@@ -246,8 +246,16 @@ export class ChssParser{
     }
   }
 
-  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument):Promise<MiniMatch[]>{
+  private webview?:WebviewPanel;
+  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument,debug=false):Promise<MiniMatch[]>{
     if (doc && complex &&!this.doms.has(doc.uri.toString())) this.doms.set(doc.uri.toString(), await DomSimulator.init(doc.uri, rangeObject,doc));
+    if (debug && this.doms.has(doc?.uri.toString() ?? '')){
+      if (!this.webview){
+        this.webview = window.createWebviewPanel('domDebugView', 'Dom Debug Preview', {preserveFocus:true,viewColumn:ViewColumn.Beside},{enableFindWidget:true,retainContextWhenHidden:true});
+        this.webview.onDidDispose(() => this.webview = undefined);
+      }
+      this.webview.webview.html = this.doms.get(doc!.uri.toString())!.getHtml();
+    }
 
     const tokenOnlyMatch = async(parsed:ParsedSelector):Promise<MatchPair> => {
       const tarray = parsed.type.includes('*')?['*']:parsed.type;
@@ -311,15 +319,14 @@ export class ChssParser{
   }
 
 
-  public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false):Promise<ChssMatch[]>{
+  public async processChss(rangeObject:TokenCollection,rules:ChssRule[],doc?:TextDocument,insensitive=false,debug=false):Promise<ChssMatch[]>{
     doc && this.doms.delete(doc.uri.toString());
     const matched:ProtoChssMatch[] = [];
     const combined = new Map<string,ChssMatch>();
-    // We only need the DOM for complex rules
 
     for (const {selectors,style,scope,colorActions} of rules) {
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
-      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isCompund(selectors), rangeObject,insensitive,doc)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
+      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isCompund(selectors), rangeObject,insensitive,doc,debug)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
     }
 
     for (const current of matched){
