@@ -13,6 +13,11 @@ const symbolSort = (a:{range:Range},b:{range:Range}) => a.range.start.compareTo(
 const tokenToSymbol = ({range,name}:TokenData):DocumentSymbol => ({range,children:[],selectionRange:range,name,detail:'generated',kind:SymbolKind.Variable});
 const getNodeType = (sym:DocumentSymbol,token?:TokenData) => (token?.type??SymbolKind[sym.kind].toLowerCase()) as SymbolToken;
 export class DomSimulator{
+
+  static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
+    return new DomSimulator(await commands.executeCommand('vscode.executeDocumentSymbolProvider',target),tokens,target,text);
+  }
+
   private constructor(
     symbols:DocumentSymbol[],
     tokens:TokenCollection,
@@ -37,7 +42,8 @@ export class DomSimulator{
     const encodeNode = (sym:DocumentSymbol,parent:HTMLElement,token?:TokenData,manualType?:SymbolToken,top=false) => {
       const noNest = new Set(['package','keyword','other']);
       const fullRange = sym.range;
-      const range = sym.name.startsWith('<')?new Range(fullRange.start,fullRange.start):sym.selectionRange;
+
+      const range = !sym.selectionRange.isSingleLine || sym.name.length !== sym.selectionRange.end.character - sym.selectionRange.start.character?new Range(fullRange.start,fullRange.start):sym.selectionRange;
       const rangeIdent = rangeToIdentifier(range);
       if (processedRanges.has(rangeIdent)) return;
       const rangeIdentFull = rangeToIdentifier(fullRange);
@@ -76,10 +82,6 @@ export class DomSimulator{
 
     for (const a of all) !processedRanges.has(rangeToIdentifier(a.range)) && encodeNode(tokenToSymbol(a),document.body,a,undefined,true);
     sortChildren(document.body);
-  }
-
-  static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
-    return new DomSimulator(await commands.executeCommand('vscode.executeDocumentSymbolProvider',target),tokens,target,text);
   }
 
   public selectorToCSS({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[],caseInsensitive=false){
