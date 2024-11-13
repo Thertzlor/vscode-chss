@@ -196,6 +196,7 @@ export class ChssParser{
     const invalid = {specificity:[-1,-1,-1] as Specifity, name:'', type:[''],modifiers:[],notSelectors:[], combinator,invalid:true};
     const pseudo = pseudos.find(b => stringSelector.includes(`::${b}`));
     let selector = pseudo?stringSelector.replaceAll(`::${pseudo}`, ''):stringSelector;
+    let currentSpecifity = baseSpecifity;
 
     const notEx = /:not\([^)]*?\)/;
     /** container for not() queries */
@@ -213,15 +214,22 @@ export class ChssParser{
     const notSelectors = [] as ParsedSelector[][];
     for (const not of nots) {
       // recursion! ...but :not() can't be nested, so it can't be infinite.
-      const np = this.stringToSelectors(not,baseSpecifity);
+      const np = this.stringToSelectors(not,currentSpecifity);
       // If one :not() selector is invalid the whole selector is invalid
       if (np.some(n => n.invalid)) return invalid;
       notSelectors.push(np);
     }
 
-    if (selector === '*') return {specificity:sumSpecificity(baseSpecifity,[0,0,0]), name:'', type:['*'],modifiers:[],pseudo,notSelectors,combinator};
+    if (notSelectors.length){
+      // CSS compliant behavior: The :not() selector adds the highest specificity of its selectors to the parent selector.
+      const {specificity} = notSelectors.flat().sort((a,b) => (isMoreSpecific(a.specificity,b.specificity)?1:-1)).at(-1)!;
+      console.log(specificity);
+      currentSpecifity = sumSpecificity(currentSpecifity,specificity);
+    }
+
+    if (selector === '*') return {specificity:sumSpecificity(currentSpecifity,[0,0,0]), name:'', type:['*'],modifiers:[],pseudo,notSelectors,combinator};
     // name selector for all types: name
-    if (/^\w+$/.test(selector)) return {specificity:sumSpecificity(baseSpecifity,[1,0,0]), name:selector, type:['*'],modifiers:[],pseudo,notSelectors,combinator};
+    if (/^\w+$/.test(selector)) return {specificity:sumSpecificity(currentSpecifity,[1,0,0]), name:selector, type:['*'],modifiers:[],pseudo,notSelectors,combinator};
 
     // name selector with at least one non-standard symbol 
     if (/^\w+$/.test(selector.slice(1)) && !selector.startsWith(':')){
@@ -229,9 +237,9 @@ export class ChssParser{
 
       switch (sliced) {
       //variable: #name
-      case '#': return {specificity:sumSpecificity(baseSpecifity,[1,1,0]), name:selector.slice(1), type:['variable'],modifiers:[],pseudo,notSelectors,combinator};
+      case '#': return {specificity:sumSpecificity(currentSpecifity,[1,1,0]), name:selector.slice(1), type:['variable'],modifiers:[],pseudo,notSelectors,combinator};
       //function: .name
-      case '.': return {specificity:sumSpecificity(baseSpecifity,[1,1,0]), name:selector.slice(1), type:['function'],modifiers:[],pseudo,notSelectors,combinator};
+      case '.': return {specificity:sumSpecificity(currentSpecifity,[1,1,0]), name:selector.slice(1), type:['function'],modifiers:[],pseudo,notSelectors,combinator};
       //any other special character is invalid.
       default: return invalid;
       }
@@ -251,25 +259,26 @@ export class ChssParser{
       const value = content || operator;
       //The advanced match NEEDS either a RegEx or wildcards, otherwise just use a plain name. 
       if (matchType === 'match' && (!value.includes('*') && !/^\/.+\/i?$/.test(value))) return invalid;
-      const insensitive = value.slice(0,-1).endsWith('/i');
-      const regexp=matchType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,insensitive?-2:-1):`^${value.replace('*','.*')}$`,insensitive && value.startsWith('"')?'i':undefined):undefined;
+      const insensitive = value.endsWith('/i');
+
+      const regexp=matchType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,insensitive?-2:-1):`^${value.replaceAll('*','.*')}$`,insensitive && value.startsWith('"')?'i':undefined):undefined;
+      console.log(regexp);
 
       let typeFilter = subSelector;
       if (subSelector) typeFilter = subSelector.includes(':') ? ((c = subSelector.indexOf(':')) => `[${subSelector.slice(0,c)}]${subSelector.slice(c)}`)() : `[${subSelector}]`;
 
-      const {invalid:inv,type=['*'],modifiers=[],specificity=[0,0,0]} = subSelector? this.parseSingleSelector(typeFilter,baseSpecifity):{};
-      console.log({inv,specificity});
+      const {invalid:inv,type=['*'],modifiers=[],specificity=[0,0,0]} = subSelector? this.parseSingleSelector(typeFilter,currentSpecifity):{};
       if (inv) return invalid;
       return {specificity:sumSpecificity(specificity,[0,matchSpecificty[matchType],0]), name:value, type,modifiers,regexp,match:matchType,pseudo,notSelectors,combinator};
     }
     // general type: [variable]
-    if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:sumSpecificity(baseSpecifity,[0,1,0]), name:'', type:selector.slice(1,-1).split('/').map(t => t.trim()),modifiers:[],pseudo,notSelectors,combinator};
+    if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:sumSpecificity(currentSpecifity,[0,1,0]), name:'', type:selector.slice(1,-1).split('/').map(t => t.trim()),modifiers:[],pseudo,notSelectors,combinator};
     // extended type with one or more modifiers: [variable]:readonly
     if (selector.startsWith('[')){
       const [sel='',...modifiers] = selector.split(':');
 
       if (!modifiers.length || !sel.endsWith(']')) return invalid;
-      return {specificity:sumSpecificity(baseSpecifity,[0,1,modifiers.length]), name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo,notSelectors,combinator};
+      return {specificity:sumSpecificity(currentSpecifity,[0,1,modifiers.length]), name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo,notSelectors,combinator};
     }
     //compound: name[variable]:readonly
     if (selector.includes('[') && selector.includes(']')){
@@ -277,17 +286,17 @@ export class ChssParser{
       const [name,type,mods] = selector.split(/\[|\]/gm);
 
       if (!type) return invalid;
-      if (!mods) return {specificity:sumSpecificity(baseSpecifity,[1,1,0]), name, type:type.split('/').map(t => t.trim()),modifiers:[],notSelectors,combinator};
+      if (!mods) return {specificity:sumSpecificity(currentSpecifity,[1,1,0]), name, type:type.split('/').map(t => t.trim()),modifiers:[],notSelectors,combinator};
       const splitMods = mods.split(':').filter(s => s);
 
-      return {specificity:sumSpecificity(baseSpecifity,[1,1,mods.length]), name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
+      return {specificity:sumSpecificity(currentSpecifity,[1,1,mods.length]), name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
     // name with modifiers: variable:modifier
     const [ident, ...splitMods] = selector.split(':');
 
-    if (!ident) return splitMods.length? {specificity:sumSpecificity(baseSpecifity,[0,0,splitMods.length]), name:'', type:['*'],modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo,notSelectors,combinator}:invalid;
-    const {specificity,name,type,invalid:inv} = ident!=='/'?this.parseSingleSelector(ident,baseSpecifity):invalid;
+    if (!ident) return splitMods.length? {specificity:sumSpecificity(currentSpecifity,[0,0,splitMods.length]), name:'', type:['*'],modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo,notSelectors,combinator}:invalid;
+    const {specificity,name,type,invalid:inv} = ident!=='/'?this.parseSingleSelector(ident,currentSpecifity):invalid;
     if (inv) return invalid;
     return {specificity:sumSpecificity(specificity,[0,0,splitMods.length]), name, type,modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
   }
@@ -357,7 +366,6 @@ export class ChssParser{
         finalSelectors.push(accumulator.join(', '));
         finalParsed.push(group.filter(v => typeof v !== 'string').at(-1)!);
       }
-      console.log(...finalSelectors);
       return finalSelectors.map((fn, i) => ((mp = dom.matchesFromCSS(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as MiniMatch)());
     };
 
