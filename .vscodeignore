@@ -9,3 +9,7 @@ tsconfig.json
 .gitignore
 eslint.config.mjs
 esbuild.js
+*.vsix
+_test/*
+.VSCodeCounter/**
+*.chss

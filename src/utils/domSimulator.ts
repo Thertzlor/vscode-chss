@@ -84,6 +84,16 @@ export class DomSimulator{
     sortChildren(document.body);
   }
 
+  /**
+   * This method converts the selection objects parsed from our "fake" CSS to real CSS. The cycle is complete.  
+   * This will for example convert  `DecorationManager:declaration:not(line) > [method/function]`  
+   * to:`div[data-name="DecorationManager" i].declaration:not(#o7126,#o7424,#o7790,#o7804) >.declaration.method, div[data-name="DecorationManager" i].declaration:not(#o7126,#o7424,#o7790,#o7804) >.declaration.function`
+   * @param selector - The Selector to parse 
+   * @param prevSelectors - Parsed previous selectors that the current selector needs to be appended to.
+   * @param regexOffsets - An array of offsets to limit the match to specific elements determined by regex.
+   * @param notRanges - An array of offsets to include elemens from the match based on :not() selectors
+   * @param caseInsensitive - If true matches names case insensitively.
+   */
   public selectorToCSS({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[],caseInsensitive=false){
     /**For making attribute selectors case insensitive */
     const flag = caseInsensitive?' i':'';

@@ -2,6 +2,7 @@ import {commands,window} from 'vscode';
 import {rangesByName} from './rangesByName';
 import type {Range, SemanticTokens, SemanticTokensLegend, TextEditorDecorationType} from 'vscode';
 import type {ChssParser} from './chssParser';
+import {setTimeStyled} from './helperFunctions';
 
 
 export class DecorationManager{
@@ -29,6 +30,7 @@ export class DecorationManager{
 
   public async processEditor(editor = window.activeTextEditor,full=false,rules:ReturnType<typeof this.parser.parseChss>,insen = false,debugMode=false) {
     if (!editor) return;
+    setTimeStyled(editor.document.uri);
     const textDocument = editor.document;
     const {uri} = textDocument;
     const uString = uri.toString();

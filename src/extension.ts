@@ -3,7 +3,7 @@ import type {ExtensionContext, ConfigurationChangeEvent} from 'vscode';
 import {ChssParser} from './utils/chssParser';
 import {TextDecoder} from 'util';
 import {isAbsolute} from 'path';
-import {debounce} from './utils/helperFunctions';
+import {debounce, needsRestyled, setTimeChanged} from './utils/helperFunctions';
 import {DecorationManager} from './utils/decorationManager';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
@@ -25,29 +25,26 @@ export async function activate(context:ExtensionContext) {
   const main = async() => {
     const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
     const decorator = new DecorationManager(parser);
-    let styleTime = 0;
-    const timeMap = new Map<string,number>();
 
     const debounceVal = 100;
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
     let rules = parser.parseChss(chssText);
-
     const processAll = debounce(() => {for (const e of window.visibleTextEditors) decorator.processEditor(e,true,rules,insensitive,debugMode);},debounceVal);
     const throttledEditor = debounce((...args:Parameters<DecorationManager['processEditor']>) => decorator.processEditor(...args) ,debounceVal);
 
     processAll();
 
     context.subscriptions.push(
-      window.onDidChangeActiveTextEditor(e => (decorator.decorations.has(e?.document.uri.toString()??'')&& (timeMap.get(e!.document.uri.toString()) ?? 0 > styleTime)?decorator.reApply(e):decorator.processEditor(e,false,rules,insensitive,debugMode))),
+      window.onDidChangeActiveTextEditor(e => {
+        decorator.decorations.has(e?.document.uri.toString()??'') && !needsRestyled(e?.document.uri)?decorator.reApply(e):decorator.processEditor(e,false,rules,insensitive,debugMode);}),
       workspace.onDidChangeTextDocument(e => {
         if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
         if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
-          styleTime = Date.now();
           rules = parser.parseChss(e.document.getText());
           processAll();
         }
         else {
-          timeMap.set(e.document.uri.toString(),Date.now());
+          setTimeChanged(e.document.uri);
           throttledEditor(undefined,false,rules,insensitive,debugMode);
         }
       }),

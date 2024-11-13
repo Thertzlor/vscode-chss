@@ -3,6 +3,7 @@ import color from 'tinycolor2';
 import {TextDocument, Uri} from 'vscode';
 import type {TokenCollection} from './rangesByName';
 import {DomSimulator} from './domSimulator';
+import {setFreshStyle} from './helperFunctions';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 export interface ParsedSelector {type:string[], combinator?:string, invalid?:boolean, specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo,notSelectors:ParsedSelector[][]}
@@ -54,6 +55,7 @@ export class ChssParser{
    * @param source -The source code of the file
    */
   public parseChss(source:string){
+    setFreshStyle();
     const res = [] as ChssRule[];
     let skipNext = false;
     let currentScope:string|undefined;
@@ -223,7 +225,6 @@ export class ChssParser{
     if (notSelectors.length){
       // CSS compliant behavior: The :not() selector adds the highest specificity of its selectors to the parent selector.
       const {specificity} = notSelectors.flat().sort((a,b) => (isMoreSpecific(a.specificity,b.specificity)?1:-1)).at(-1)!;
-      console.log(specificity);
       currentSpecifity = sumSpecificity(currentSpecifity,specificity);
     }
 
@@ -262,7 +263,6 @@ export class ChssParser{
       const insensitive = value.endsWith('/i');
 
       const regexp=matchType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,insensitive?-2:-1):`^${value.replaceAll('*','.*')}$`,insensitive && value.startsWith('"')?'i':undefined):undefined;
-      console.log(regexp);
 
       let typeFilter = subSelector;
       if (subSelector) typeFilter = subSelector.includes(':') ? ((c = subSelector.indexOf(':')) => `[${subSelector.slice(0,c)}]${subSelector.slice(c)}`)() : `[${subSelector}]`;

@@ -1,11 +1,21 @@
 import {Range} from 'vscode';
-import type {SymbolKind} from 'vscode';
+import type {SymbolKind,Uri} from 'vscode';
 import type {Pseudo} from './chssParser';
 export type RangeIdentifier = ReturnType<typeof rangeToIdentifier>;
 export type SymbolToken = Lowercase<keyof typeof SymbolKind>|'parameter'|'type';
 
 const rts = new WeakMap<Range,string>();
 const str = new Map<string,Range>();
+
+const timeChangeMap = new Map<string,number>();
+const timeStyleMap = new Map<string,number>();
+
+export const needsRestyled = (u?:Uri) => (timeChangeMap.get(u?.toString()??'') ?? 0) >= (timeStyleMap.get(u?.toString()??'') ?? 0);
+
+export const setTimeStyled = (u?:Uri) => u && void timeStyleMap.set(u.toString(),Date.now());
+export const setTimeChanged = (u?:Uri) => u && void timeChangeMap.set(u.toString(),Date.now());
+
+export const setFreshStyle = () => timeStyleMap.clear();
 
 export const mightMissProps = new Set(['typescript','javascript']);
 export const accessors = new Map(([
