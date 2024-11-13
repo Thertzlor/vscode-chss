@@ -20,7 +20,7 @@ export class DomSimulator{
 
   private constructor(
     symbols:DocumentSymbol[],
-    tokens:TokenCollection,
+    {all,byRange}:TokenCollection,
     public readonly uri:Uri,
     readonly stringContent:TextDocument,
     readonly lang = stringContent.languageId,
@@ -29,8 +29,8 @@ export class DomSimulator{
   ){
     const tokenIndex = new Set<number>();
     const collapsable = new Set<SymbolToken>(['variable','constant']);
-    const {all,byRange} = tokens;
     const processedRanges = new Map<string,[HTMLDivElement,Range]>();
+    const allTokens = new Set(all);
     /**
      * Sorting the child Elements of a DOM node into the same order the tokens were in the document.
      * @param node - The parent element
@@ -39,15 +39,15 @@ export class DomSimulator{
       for (const c of node.children.sort((a:HTMLDivElement,b:HTMLDivElement) => processedRanges.get(a.getAttribute('data-namerange'))![1].start.compareTo(processedRanges.get(b.getAttribute('data-namerange'))![1].start))) node.appendChild(c);
     };
 
-    const encodeNode = (sym:DocumentSymbol,parent:HTMLElement,token?:TokenData,manualType?:SymbolToken,top=false) => {
+    const encodeNode = (sym:DocumentSymbol,parent:HTMLElement,tokenData?:TokenData,manualType?:SymbolToken,top=false) => {
       const noNest = new Set(['package','keyword','other']);
       const fullRange = sym.range;
-
+      //Anonymous functions have their entire body declared as selectionRange, which we don't want. So we reduce it to an zero length range.
       const range = !sym.selectionRange.isSingleLine || sym.name.length !== sym.selectionRange.end.character - sym.selectionRange.start.character?new Range(fullRange.start,fullRange.start):sym.selectionRange;
       const rangeIdent = rangeToIdentifier(range);
       if (processedRanges.has(rangeIdent)) return;
       const rangeIdentFull = rangeToIdentifier(fullRange);
-      const semant = token ?? byRange.get(rangeToIdentifier(range));
+      const semant = tokenData ?? byRange.get(rangeToIdentifier(range));
       const nodeType = manualType ?? getNodeType(sym,semant);
       if (noNest.has(nodeType)) for (const cc of sym.children.sort(symbolSort)) encodeNode(cc,parent);
       else {
@@ -63,24 +63,26 @@ export class DomSimulator{
         if (semant)tokenIndex.add(semant.index);
         const tokenSymbols = new Set<SymbolData>();
         let currentData:SymbolData|undefined;
-        for (const tok of all) {
-          if (!top && fullRange.start.isAfterOrEqual(tok.range.end)) continue;
-          if (!top && (sym.children.length || !collapsable.has(nodeType)?fullRange:range).end.isBeforeOrEqual(tok.range.start)) break;
-          if (tokenIndex.has(tok.index)) continue;
-          const sy = tokenToSymbol(tok);
-          const sData:SymbolData = {tk:tok,sy,tp:getNodeType(sy,tok)};
+        // The tree of DocumentSymbols actually only tracks declarations of symbols. We fill in the rest from our token list.
+        for (const token of allTokens) {
+          if (!top && fullRange.start.isAfterOrEqual(token.range.end)) continue;
+          if (!top && (sym.children.length || !collapsable.has(nodeType)?fullRange:range).end.isBeforeOrEqual(token.range.start)) break;
+          if (tokenIndex.has(token.index)) continue;
+          const sy = tokenToSymbol(token);
+          const sData:SymbolData = {tk:token,sy,tp:getNodeType(sy,token)};
           if (currentData && isField.has(sData.tp) && hasFields.has(currentData.tp) && accessors.get(lang)?.has(stringContent.getText(new Range(currentData.tk.range.end,sData.tk.range.start)).trim())){
             currentData.sy.children.push(sData.sy);
           } else tokenSymbols.add(sData);
           currentData = hasFields.has(sData.tp)? sData:undefined;
+          allTokens.delete(token);
         }
         for (const {tk,sy,tp} of tokenSymbols) encodeNode(sy,current,tk,tp);
         sortChildren(current);
       }
     };
     for (const e of symbols.sort(symbolSort)) encodeNode(e,document.body as any as HTMLElement);
-
-    for (const a of all) !processedRanges.has(rangeToIdentifier(a.range)) && encodeNode(tokenToSymbol(a),document.body,a,undefined,true);
+    // Iterating again, for all unprocessed top level tokens.
+    for (const a of all) encodeNode(tokenToSymbol(a),document.body,a,undefined,true);
     sortChildren(document.body);
   }
 

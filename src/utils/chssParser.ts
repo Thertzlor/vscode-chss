@@ -1,9 +1,9 @@
-import {Range ,languages, RelativePattern,window,ViewColumn, WebviewPanel} from 'vscode';
+import {languages,RelativePattern, window,ViewColumn,WebviewPanel} from 'vscode';
 import color from 'tinycolor2';
-import {TextDocument, Uri} from 'vscode';
-import type {TokenCollection} from './rangesByName';
 import {DomSimulator} from './domSimulator';
 import {setFreshStyle} from './helperFunctions';
+import type {TokenCollection} from './rangesByName';
+import type {TextDocument, Uri, Range} from 'vscode';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
 export interface ParsedSelector {type:string[], combinator?:string, invalid?:boolean, specificity:Specificity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo,notSelectors:ParsedSelector[][]}

@@ -56,11 +56,12 @@ export class DecorationManager{
 
     for (const {style,range,pseudo} of chss) {
       const styleString = Object.entries(style).reduce<string>((p,[k,v]) => `${p}|${k}:${v}` ,'');
-
+      // We cache all our decorations, and only create new TextEditorDecorationTypes, if we haven't encountered a style before.
       if (this.decoGlobal.has(styleString)){
-        const doco = currentDecorations.get(styleString) ?? currentDecorations.set(styleString, []).get(styleString)!;
-        doco.push(range);
+        const targetDecoration = currentDecorations.get(styleString) ?? currentDecorations.set(styleString, []).get(styleString)!;
+        targetDecoration.push(range);
       } else {
+        // Creating a new style. Pseudo selectors like ::before, ::after and ::dark are actually sub-objects of a style object.
         const newType = window.createTextEditorDecorationType(pseudo ? {[pseudo]: style} : style);
         this.decoGlobal.set(styleString,newType);
         currentDecorations.set(styleString,[range]);
@@ -68,8 +69,10 @@ export class DecorationManager{
     }
 
     for (const [rule,rangeList] of currentDecorations.entries()){
+      //For every decoration type, we set decorations on all ranges at once.
       if (rangeList.length && this.decoGlobal.has(rule)) editor.setDecorations(this.decoGlobal.get(rule)!, rangeList);
       else {
+        //Decorations that are no longer used are disposed of. Perhaps this is over-optimizing?
         this.decoGlobal.get(rule)?.dispose();
         this.decoGlobal.delete(rule);
         currentDecorations.delete(rule);

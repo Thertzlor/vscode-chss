@@ -1,7 +1,7 @@
-import * as vscode from 'vscode';
 import {hasFields, mightMissProps, rangeToIdentifier} from './helperFunctions';
-import type {SymbolToken} from './helperFunctions';
 import {Range} from 'vscode';
+import type {SymbolToken} from './helperFunctions';
+import type {SemanticTokens, SemanticTokensLegend, TextEditor} from 'vscode';
 // import { tokenKinds } from '../configuration';
 
 /**
@@ -63,9 +63,9 @@ import {Range} from 'vscode';
  * *NOTE*: When doing edits, it is possible that multiple edits occur until VS Code decides to invoke the semantic tokens provider.
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
-export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:string,index:number, offset:number};
+export type TokenData = {name:string,range:Range,modifiers:string[],type:string,index:number, offset:number};
 export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<string,TokenData|undefined>,all:Set<TokenData>};
-export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
+export function rangesByName(data:SemanticTokens, legend:SemanticTokensLegend, editor:TextEditor) {
   const collection:TokenCollection= {byRange:new Map(),all:new Set(),byType:new Map()};
   const doc = editor.document;
   const fullText = doc.getText();
@@ -134,7 +134,7 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
 		// if (!all && (!tokenKinds.has(kind))) continue;
     const modifierFlags = ['none', ...legend.tokenModifiers].reduce((a:Record<string,number>,c,n) => (a[c]=(n-1>=2?2 << (n-2):n),a),{});
     const modifiers = legend.tokenModifiers.filter(m => modifierIndex & modifierFlags[m]);
-    const range = new vscode.Range(line, column, line, column + length);
+    const range = new Range(line, column, line, column + length);
     const name = doc.getText(range);
     const offset=doc.offsetAt(range.start);
     //Looking for missing property token between this token and the previous.
