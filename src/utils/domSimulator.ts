@@ -94,7 +94,7 @@ export class DomSimulator{
    * @param notRanges - An array of offsets to include elemens from the match based on :not() selectors
    * @param caseInsensitive - If true matches names case insensitively.
    */
-  public selectorToCSS({match,name,type,modifiers}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[],caseInsensitive=false){
+  public selectorToCSS({match,name,type,modifiers,combinator}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[],caseInsensitive=false){
     /**For making attribute selectors case insensitive */
     const flag = caseInsensitive?' i':'';
     /**Filtering out the star selector to simplify things.*/
@@ -124,6 +124,7 @@ export class DomSimulator{
     if (notRanges?.length) selectorStrings = selectorStrings.map(s => `${s}:not(${notRanges.map(n => `#o${n}`).join(',')})`);
     //Now we check if we initially had a star selector. We can't actually use * at the end, so instead we match a property that we know all elements have.
     else if (finalTypes.length !== type.length && !name)selectorStrings = selectorStrings.map(s => `${s}[data-fullrange]`);
+    if (combinator && combinator !== ',') selectorStrings = selectorStrings.map(s => `${s} ${combinator} `);
     return selectorStrings;
   }
 

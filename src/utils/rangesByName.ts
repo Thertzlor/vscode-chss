@@ -97,6 +97,7 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const lasToken = tok ?? collection.all.values().drop((idx??collection.all.size)-1).next().value;
     if (!lasToken || lasToken.modifiers.includes('declaration') || !hasFields.has(lasToken.type.toLowerCase() as SymbolToken)) return;
     const currentOffset = offset??fullText.length;
+    //In this case we know there's no space for another token.
     if (currentOffset-lasToken.offset < 3) return;
     const propertyRegex = {
       javascript:/^(\s*\??\.\s*)(\w+\(?)/,

@@ -6,17 +6,17 @@ import {DomSimulator} from './domSimulator';
 import {setFreshStyle} from './helperFunctions';
 
 type MatchType = 'endsWith'|'startsWith'|'includes'|'match';
-export interface ParsedSelector {type:string[], combinator?:string, invalid?:boolean, specificity:Specifity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo,notSelectors:ParsedSelector[][]}
+export interface ParsedSelector {type:string[], combinator?:string, invalid?:boolean, specificity:Specificity, name:string, modifiers:string[][], scopes?:string[],match?:MatchType,regexp?:RegExp,pseudo?:Pseudo,notSelectors:ParsedSelector[][]}
 interface ChssRule {selectors:ParsedSelector[], style:Record<string,string>, scope?:string, colorActions?:Map<string,[ColorAction,string]>}
-interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specifity,colorActions?:Map<string,[ColorAction,string]>,offset:number}
+interface ProtoChssMatch {range:Range, style:Record<string,string>,pseudo?:Pseudo, specificity:Specificity,colorActions?:Map<string,[ColorAction,string]>,offset:number}
 type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 export type Pseudo = typeof pseudos[number];
 type ColorAction = typeof colorMods[number];
 
-type MiniMatch = [ranges:Range[],spec:Specifity,offs:number[],pseudo?:Pseudo];
+type MiniMatch = [ranges:Range[],spec:Specificity,offs:number[],pseudo?:Pseudo];
 
 export type MatchPair = [Range[],number[]];
-type Specifity = [_id:number,_class:number,_type:number];
+type Specificity = [_id:number,_class:number,_type:number];
 
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
 const pseudos = ['before', 'after', 'light', 'dark'] as const;
@@ -33,9 +33,9 @@ const rightModifiers = (modGroups:string[][],modifiers:string[]) => !modGroups.l
  * @param b - Selector 2
  * @returns The combined specificity.
  */
-const sumSpecificity = ([a1,b1,c1]:Specifity,[a2,b2,c2]:Specifity):Specifity => [a1+a2,b1+b2,c1+c2];
+const sumSpecificity = ([a1,b1,c1]:Specificity,[a2,b2,c2]:Specificity):Specificity => [a1+a2,b1+b2,c1+c2];
 
-const isMoreSpecific = ([i1,c1,t1]:Specifity,[i2,c2,t2]:Specifity) => {
+const isMoreSpecific = ([i1,c1,t1]:Specificity,[i2,c2,t2]:Specificity) => {
   if (i1 !== i2) return i1>i2;
   if (c1 !== c2) return c1>c2;
   if (t1 !== t2) return t1>t2;
@@ -78,7 +78,7 @@ export class ChssParser{
           continue;
         }
         //By increasing the base Specificity, we make sure that scoped rules always beat out non-scoped rules.
-        const baseVal:Specifity = currentScope?[1,0,0]:[0,0,0];
+        const baseVal:Specificity = currentScope?[1,0,0]:[0,0,0];
         const selectors= this.stringToSelectors(value,baseVal);
         //No valid selectors found.
         if (!selectors.length){skipNext = true; continue;}
@@ -92,10 +92,8 @@ export class ChssParser{
       else {
         if (!value || value === 'empty'){res.pop(); continue;}
         const rules = value.split(';').map(s => s.trim()).filter(s => s);
-
         if (!rules.length){res.pop(); continue;}
-        const ruleObj = {} as Record<string,string>;
-        const cMap = this.parseColorRules(rules, ruleObj);
+        const [cMap,ruleObj] = this.parseRuleProperties(rules);
         const cuRule = res.at(-1);
         if (cuRule){
           cuRule.style = ruleObj;
@@ -123,7 +121,7 @@ export class ChssParser{
       //Only one rule can apply per offset, so that's the base of our comparison.
       const identifier = `${offset}${pseudo??''}`;
 
-      // Random is a special case for color transfroms that does not need any preexisting color.
+      // Random is a special case for color transforms that does not need any preexisting color.
       for (const [name,[action]] of colorActions?.entries() ?? []) {
         if (action !== 'random') continue;
         style[name] = color.random().toHex8String();
@@ -137,7 +135,7 @@ export class ChssParser{
         //If the old color rule IS NOT more specific, it is used as a base for our color transformations.
         if (!moreSpecific && colorActions) this.applyColorActions(colorActions, old, style);
         // Cascade magic happens here. Lower specificity rules are overridden, others remain
-        combined.set(identifier,{range, offset, style:moreSpecific?{...style, ...old.style}:{...old.style, ...style} , specificity:sA.map((s,i) => Math.max(s,sB[i])) as Specifity,pseudo});
+        combined.set(identifier,{range, offset, style:moreSpecific?{...style, ...old.style}:{...old.style, ...style} , specificity:sA.map((s,i) => Math.max(s,sB[i])) as Specificity,pseudo});
       }
     }
     return [...combined.values()];
@@ -149,7 +147,7 @@ export class ChssParser{
    * @param sourceString - The string to parse.
    * @param baseSpecificity - The minimum specificity any returned selector will have.
    */
-  private stringToSelectors(sourceString:string,baseSpecificity:Specifity = [0,0,0]){
+  private stringToSelectors(sourceString:string,baseSpecificity:Specificity = [0,0,0]){
     // This regex is getting pretty nuts.
     const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+(?:\([^)]*?\))?)*|<[^>]+?>|(?::\w+(?:\([^)]*?\))?)+|\[[^]*?]+(?::+\w+(?:\([^)]*?\))?)*|\*(?:$|\s)/g;
     const selectorMatches = [];
@@ -193,9 +191,9 @@ export class ChssParser{
    * @param baseSpecifity - Minimum specificity the selector will have.
    * @param combinator - The combinator that will follow this selector
    */
-  private parseSingleSelector(stringSelector:string,baseSpecifity:Specifity=[0,0,0],combinator?:string):ParsedSelector{
+  private parseSingleSelector(stringSelector:string,baseSpecifity:Specificity=[0,0,0],combinator?:string):ParsedSelector{
     /**The invalid selector that is returned, if we can't parse the string contents.  All fields are blank, only the  */
-    const invalid = {specificity:[-1,-1,-1] as Specifity, name:'', type:[''],modifiers:[],notSelectors:[], combinator,invalid:true};
+    const invalid = {specificity:[-1,-1,-1] as Specificity, name:'', type:[''],modifiers:[],notSelectors:[], combinator,invalid:true};
     const pseudo = pseudos.find(b => stringSelector.includes(`::${b}`));
     let selector = pseudo?stringSelector.replaceAll(`::${pseudo}`, ''):stringSelector;
     let currentSpecifity = baseSpecifity;
@@ -265,8 +263,10 @@ export class ChssParser{
       const regexp=matchType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,insensitive?-2:-1):`^${value.replaceAll('*','.*')}$`,insensitive && value.startsWith('"')?'i':undefined):undefined;
 
       let typeFilter = subSelector;
+      //Here we resolve the plain selector into a valid [type] selector, including :modifiers, if present.
       if (subSelector) typeFilter = subSelector.includes(':') ? ((c = subSelector.indexOf(':')) => `[${subSelector.slice(0,c)}]${subSelector.slice(c)}`)() : `[${subSelector}]`;
 
+      // We parse the subselector, and adds its specificity to the main selector.
       const {invalid:inv,type=['*'],modifiers=[],specificity=[0,0,0]} = subSelector? this.parseSingleSelector(typeFilter,currentSpecifity):{};
       if (inv) return invalid;
       return {specificity:sumSpecificity(specificity,[0,matchSpecificty[matchType],0]), name:value, type,modifiers,regexp,match:matchType,pseudo,notSelectors,combinator};
@@ -286,9 +286,10 @@ export class ChssParser{
       const [name,type,mods] = selector.split(/\[|\]/gm);
 
       if (!type) return invalid;
+      // Returning a selector without modifiers
       if (!mods) return {specificity:sumSpecificity(currentSpecifity,[1,1,0]), name, type:type.split('/').map(t => t.trim()),modifiers:[],notSelectors,combinator};
       const splitMods = mods.split(':').filter(s => s);
-
+      //More modifiers = more specific
       return {specificity:sumSpecificity(currentSpecifity,[1,1,mods.length]), name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
@@ -301,9 +302,18 @@ export class ChssParser{
     return {specificity:sumSpecificity(specificity,[0,0,splitMods.length]), name, type,modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
   }
 
-  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,rangeObject:TokenCollection,insensitive?:boolean,doc?:TextDocument,debug=false):Promise<MiniMatch[]>{
+  /**
+   * Takes a list of parsed selectors and returns a their matched offsets and ranges.
+   * @param selectors - An array of selectors.
+   * @param complex - True if combinators are involved.
+   * @param tokenOject - All tokens of the current document
+   * @param insensitive - Case sensitivity setting
+   * @param doc - The text document to be styled.
+   * @param debug - If true, will trigger the WebView for our DOM.
+   */
+  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,tokenOject:TokenCollection,insensitive?:boolean,doc?:TextDocument,debug=false):Promise<MiniMatch[]>{
     //If we don't have our DOM, but we need it, we initialize it here.
-    if (doc && complex &&!this.doms.has(doc.uri.toString())) this.doms.set(doc.uri.toString(), await DomSimulator.init(doc.uri, rangeObject,doc));
+    if (doc && complex &&!this.doms.has(doc.uri.toString())) this.doms.set(doc.uri.toString(), await DomSimulator.init(doc.uri, tokenOject,doc));
     // Debug WebView
     if (debug && this.doms.has(doc?.uri.toString() ?? '')){
       if (!this.webview){
@@ -315,17 +325,20 @@ export class ChssParser{
 
     /**
      * This function matches a selector by scanning the token lists of your document for matching tokens.  
-     * This will not resolve compound selectors. If any :not() selectors are compunds, DOM selection is used for them.
+     * This will not resolve compound selectors. If any :not() selectors are compounds selectors, DOM selection is used for them.
      * @param parsed - The selector to match.
      */
     const tokenOnlyMatch = async(parsed:ParsedSelector):Promise<MatchPair> => {
       const tarray = parsed.type.includes('*')?['*']:parsed.type;
       const matches = [[],[]] as MatchPair;
-      const antiRanges = await this.getNotMatches(parsed, rangeObject, insensitive, doc);
+      //First, we get all our matched :not() selectors
+      const antiRanges = await this.getNotMatches(parsed, tokenOject, insensitive, doc);
       for (const targetType of tarray) {
-        if (!rangeObject.byType.has(targetType) && targetType !== '*') continue;
-        for (const {name,range,modifiers,offset} of targetType === '*'?rangeObject.all:rangeObject.byType.get(targetType)!) {
+        //If the target has an unknown type, we can skip it.
+        if (!tokenOject.byType.has(targetType) && targetType !== '*') continue;
+        for (const {name,range,modifiers,offset} of targetType === '*'?tokenOject.all:tokenOject.byType.get(targetType)!) {
           const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
+          //Main comparison logic for name and modifier matching.
           if ((!sName || sName === tName || (parsed.match && matchName(tName,parsed.match, sName,parsed.regexp))) && rightModifiers(parsed.modifiers,modifiers) && !antiRanges.includes(offset)){
             matches[0].push(range);
             matches[1].push(offset);
@@ -340,35 +353,36 @@ export class ChssParser{
      * @param selectorGroup - A group of CHSS selectors.
      */
     const matchGroupWithTokens = (selectorGroup:ParsedSelector[]) => Promise.all(selectorGroup.map(parsed => tokenOnlyMatch(parsed).then(([r,o]) => [r,parsed.specificity,o,parsed.pseudo] as MiniMatch)));
+
+    /**
+     * For Selectors with combinators, we transform them into CSS to match against or document DOM.
+     * @param selectorGroup - A group of selectors
+     */
     const matchGroupWithDOM = async(selectorGroup:ParsedSelector[]) => {
       const dom = doc? this.doms.get(doc.uri.toString()):undefined;
       if (!dom) return [];
-      const selectorGroups = [[]] as (ParsedSelector|string)[][];
+      const selectorGroups = [[]] as ParsedSelector[][];
       for (const pSelect of selectorGroup){
         const currentGroup = selectorGroups.at(-1)!;
         const nextOperator = pSelect.combinator;
-        const payload = [pSelect] as (ParsedSelector|string)[];
         if (nextOperator && nextOperator === ',') selectorGroups.push([]);
-        else if (nextOperator) payload.push(nextOperator);
-        currentGroup.push(...payload);
+        currentGroup.push(pSelect);
       }
       const finalSelectors = [] as string[];
       const finalParsed = [] as ParsedSelector[];
       for (const group of selectorGroups){
         let accumulator = ['div'] as string[];
-        for (const element of group){
-          accumulator = typeof element === 'string'?
-            //If the element is a string, it's a combinator to be added to the selector
-            accumulator.map(s => `${s} ${element}`):
-            //Otherwise it's an selector object, which we'll parse with our simulated DOM.
-            dom.selectorToCSS(element,accumulator,element.regexp?(await tokenOnlyMatch(element))[1]:undefined,await this.getNotMatches(element, rangeObject, insensitive, doc),insensitive);
-        }
+        //Turning the selector into CSS
+        for (const element of group) accumulator = dom.selectorToCSS(element,accumulator,element.regexp?(await tokenOnlyMatch(element))[1]:undefined,await this.getNotMatches(element, tokenOject, insensitive, doc),insensitive);
         finalSelectors.push(accumulator.join(', '));
-        finalParsed.push(group.filter(v => typeof v !== 'string').at(-1)!);
+        //The last selector in the group will have the highest specificity, which will be used to resolve conflicts.
+        finalParsed.push(group.at(-1)!);
       }
+      //Here, we get the actual token ranges, translated from the attributes encoded in the DOM nodes.
       return finalSelectors.map((fn, i) => ((mp = dom.matchesFromCSS(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as MiniMatch)());
     };
 
+    // We only need the DOM for complex selectors.
     if (complex && this.doms.has(doc?.uri.toString() ?? '')) return matchGroupWithDOM(selectors);
     return matchGroupWithTokens(selectors);
   }
@@ -385,39 +399,52 @@ export class ChssParser{
     return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompund(sels), tokens, insensitive, doc)))).flat().flatMap(p => p[2]) : [];
   }
 
-  private parseColorRules(rules:string[], ruleObj:Record<string, string>) {
+  /**
+   * Convert CSS properties into a style object useable with TextDecorationOptions  
+   * Also outputs any TinyColor colorActions that may be defined for a property.
+   * @param rules - A list of css properties and values
+   */
+  private parseRuleProperties(rules:string[]) {
+    const ruleObj = {} as Record<string,string>;
     const cMap= new Map<string,[ColorAction,string]>();
     for (const r of rules) {
       const [_, name, value] = [...r.match(/^([^:]+):(.*)$/) ?? [void 0]].map(s => s?.trim());
       if (name && value) {
+        //removing quotes.
         const unquoted = value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
         if (colorMods.some(m => value.startsWith(`${m}(`))) {
+          //We parse the name and argument for the color transformation so they can be used directly.
           const [mode, arg] = value.split(/\(|\)/gm).map(s => s.trim());
           cMap.set(name, [mode as ColorAction, arg]);
         }
+        //converting css kebab-case to camelCase.
         else ruleObj[name.replaceAll(/-(\w)/gm, a => a[1].toUpperCase())] = unquoted;
       }
     }
-    return cMap;
+    return [cMap,ruleObj] as const;
   }
 
-  private applyColorActions(colorActions:Map<string, [ColorAction,string]>, old:ChssMatch, style:Record<string, string>) {
+  private applyColorActions(colorActions:Map<string, [ColorAction,string]>, match:ChssMatch, style:Record<string, string>) {
     for (const [name, [action, args]] of colorActions.entries()) {
+      // Random is already taken care of.
       if (action === 'random') continue;
-      if (!(name in old.style)) continue;
+      if (!(name in match.style)) continue;
 
-      const colorIdent = [old.style[name], action, args].join('-');
+      const colorIdent = [match.style[name], action, args].join('-');
+      //If we already know what color the transformation will result in, we just give back the cached result.
       if (this.colorMap.has(colorIdent)) {
         style[name] = this.colorMap.get(colorIdent)!;
         continue;
       }
 
-      const oldCol = color(old.style[name]);
+      const oldCol = color(match.style[name]);
+      //Skipping broken rules.
       if (!oldCol.isValid()) continue;
-
+      //Applying the tinyColor transformation.
       const newCol = oldCol[action](args ? parseInt(args, 10) : undefined as never);
       if (newCol.isValid()) {
         const hexa = newCol.toHex8String();
+        //caching our result.
         this.colorMap.set(colorIdent, hexa);
         style[name] = hexa;
       }

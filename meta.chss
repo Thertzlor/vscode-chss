@@ -1,7 +1,7 @@
 // This is the example CHSS file for the source code of the CHSS extension. It felt fitting to demonstrate CHSS on itself.
 
-<="deco*"=variable:readonly>{
-color:rgb(64, 112, 214)
+<"/deco/i">{
+color:rgb(98, 140, 225)
 }
 
 [variable] {
