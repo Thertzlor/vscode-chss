@@ -1,14 +1,13 @@
-import {workspace,window, TextEditorDecorationType,commands,Uri} from 'vscode';
-import type {Range, ExtensionContext, SemanticTokens, SemanticTokensLegend, ConfigurationChangeEvent} from 'vscode';
-import {rangesByName} from './utils/rangesByName';
+import {workspace,window, Uri} from 'vscode';
+import type {ExtensionContext, ConfigurationChangeEvent} from 'vscode';
 import {ChssParser} from './utils/chssParser';
 import {TextDecoder} from 'util';
 import {isAbsolute} from 'path';
 import {debounce} from './utils/helperFunctions';
+import {DecorationManager} from './utils/decorationManager';
 // import TextmateLanguageService from 'vscode-textmate-languageservice';
 
 const getConfigGeneric = <O extends Record<string,unknown>>(section:string) => <K extends Extract<keyof O,string>>(name:K) => ((c=workspace.getConfiguration(section)) => (c.get(name)??c.inspect(name)?.defaultValue) as O[K])();
-const decoGlobal = new Map<string,TextEditorDecorationType>();
 
 export async function activate(context:ExtensionContext) {
   // const selector: vscode.DocumentSelector = 'custom';
@@ -18,97 +17,41 @@ export async function activate(context:ExtensionContext) {
   const loadFile = async(p=getConfig('stylesheetLocation')) => (p?isAbsolute(p)? Uri.file(p) : (await workspace.findFiles(p))[0] as Uri|undefined:undefined);
 
   let directUpdate = getConfig('realtimeCHSS');
-  let insen = getConfig('caseInsensitiveMatch');
+  let insensitive = getConfig('caseInsensitiveMatch');
   let debugMode = getConfig('debugView');
   let chssFile = await loadFile();
-  console.log('imagine activating an extension');
+  // console.log('imagine activating an extension');
 
   const main = async() => {
-    const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
     const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
-    const decorations = new Map<string,Map<string,[decoRanges:Range[]]>>();
-    const debounceVal = 100;
+    const decorator = new DecorationManager(parser);
 
+    const debounceVal = 100;
+    const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
     let rules = parser.parseChss(chssText);
 
-    const reApply=async(editor = window.activeTextEditor) => {
-      if (!editor) return;
-      const textDocument = editor.document;
-      const {uri} = textDocument;
-      const uString = uri.toString();
-      const decos = (decorations.has(uString)?decorations.get(uString):decorations.set(uString, new Map()).get(uString))!;
-      for (const [k,[rs]] of decos.entries()) (rs.length && decoGlobal.has(k)) && editor.setDecorations(decoGlobal.get(k)!, rs);
-    };
-
-    const processEditor = async(editor = window.activeTextEditor,full=false) => {
-      if (!editor) return;
-      const textDocument = editor.document;
-      const {uri} = textDocument;
-      const uString = uri.toString();
-      const decos = (decorations.has(uString)?decorations.get(uString):decorations.set(uString, new Map()).get(uString))!;
-      const tokensData:SemanticTokens | undefined = await commands.executeCommand('vscode.provideDocumentSemanticTokens', uri);
-      const legend:SemanticTokensLegend | undefined = await commands.executeCommand('vscode.provideDocumentSemanticTokensLegend', uri);
-      if (!tokensData || !legend) return;
-
-      for (const [k,[arr]] of decos.entries()) {
-        arr.length=0;
-        if (full){
-          editor.setDecorations(decoGlobal.get(k)!, []);
-          decos.delete(k);
-        }
-      }
-
-      const ranges = rangesByName(tokensData,legend,editor);
-      const chss = await parser.processChss(ranges,rules,textDocument,insen,debugMode);
-
-      for (const {style,range,pseudo} of chss) {
-        const stryle = JSON.stringify(style);
-
-        if (decoGlobal.has(stryle)){
-          const doco = decos.get(stryle) ?? decos.set(stryle, [[]]).get(stryle)!;
-          doco[0].push(range);
-        } else {
-          const newType = window.createTextEditorDecorationType(pseudo ? {[pseudo]: style} : style);
-          decoGlobal.set(stryle,newType);
-          decos.set(stryle,[[range]]);
-        }
-      }
-
-      for (const [k,[rs]] of decos.entries()){
-        if (rs.length && decoGlobal.has(k)) editor.setDecorations(decoGlobal.get(k)!, rs);
-        else {
-          decoGlobal.get(k)?.dispose();
-          decoGlobal.delete(k);
-          decos.delete(k);
-        }
-      }
-
-    };
-
-    const processAll = debounce(() => {for (const e of window.visibleTextEditors) processEditor(e,true);},debounceVal);
-    const throttledEditor = debounce(processEditor,debounceVal);
+    const processAll = debounce(() => {for (const e of window.visibleTextEditors) decorator.processEditor(e,true,rules,insensitive,debugMode);},debounceVal);
+    const throttledEditor = debounce((...args:Parameters<DecorationManager['processEditor']>) => decorator.processEditor(...args) ,debounceVal);
 
     processAll();
 
     context.subscriptions.push(
-      window.onDidChangeActiveTextEditor(e => (decorations.has(e?.document.uri.toString()??'')?reApply(e):processEditor(e))),
+      window.onDidChangeActiveTextEditor(e => (decorator.decorations.has(e?.document.uri.toString()??'')?decorator.reApply(e):decorator.processEditor(e,false,rules,insensitive,debugMode))),
       workspace.onDidChangeTextDocument(e => {
         if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
         if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
           rules = parser.parseChss(e.document.getText());
           processAll();
         }
-        else throttledEditor();
+        else throttledEditor(undefined,false,rules,insensitive,debugMode);
       }),
       workspace.onDidChangeConfiguration(
         async(e:ConfigurationChangeEvent) => {
           let reProcess = false;
-
           e.affectsConfiguration('chss.realtimeCHSS') && (directUpdate = getConfig('realtimeCHSS'));
           if (e.affectsConfiguration('chss.stylesheetLocation')) {chssFile = await loadFile(); reProcess = true;}
-          if (e.affectsConfiguration('chss.caseInsensitiveMatch')) {insen = getConfig('caseInsensitiveMatch'); reProcess = true;}
+          if (e.affectsConfiguration('chss.caseInsensitiveMatch')) {insensitive = getConfig('caseInsensitiveMatch'); reProcess = true;}
           if (e.affectsConfiguration('chss.debugView')) {debugMode = getConfig('debugView');}
-
           reProcess && processAll();
         }
       )
@@ -119,14 +62,11 @@ export async function activate(context:ExtensionContext) {
     const createWatcher = workspace.onDidCreateFiles(async() =>
     {
       chssFile = await loadFile();
-      if (chssFile){
-        createWatcher.dispose();
-        main();
-      }
+      if (!chssFile) return;
+      createWatcher.dispose();
+      main();
     });
     context.subscriptions.push(createWatcher);
   } else main();
 }
-export async function deactivate(){
-  for (const element of decoGlobal.values()) element.dispose();
-}
+export async function deactivate(){/**/}

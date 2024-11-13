@@ -23,7 +23,6 @@ export const identifierToRange = (ident:RangeIdentifier) => (str.has(ident)?str.
 
 export const debounce = <T extends (...args:any[])=>any>(callback:T, wait:number) => {
   let timeoutId:ReturnType<typeof setTimeout> |undefined;
-
   return (...args:Parameters<T>) => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => callback(...args), wait);

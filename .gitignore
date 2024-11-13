@@ -4,3 +4,4 @@
 *.vsix
 dist/**
 _test/**
+/.VSCodeCounter

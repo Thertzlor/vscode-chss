@@ -182,7 +182,7 @@ export default [{
     '@stylistic/no-confusing-arrow': 1,
     '@stylistic/space-unary-ops': 1,
     '@stylistic/comma-style': 1,
-    '@stylistic/no-trailing-spaces': 1,
+    '@stylistic/no-trailing-spaces': [1, {ignoreComments: true}],
     '@stylistic/new-parens': 1,
     '@stylistic/no-whitespace-before-property': 1,
     '@stylistic/function-call-spacing': 1,

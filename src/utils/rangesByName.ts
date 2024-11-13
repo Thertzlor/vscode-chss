@@ -67,13 +67,14 @@ export type TokenData = {name:string,range:vscode.Range,modifiers:string[],type:
 export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<string,TokenData|undefined>,all:Set<TokenData>};
 export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticTokensLegend, editor:vscode.TextEditor) {
   const collection:TokenCollection= {byRange:new Map(),all:new Set(),byType:new Map()};
-  const recordSize = 5;
-  let line = 0;
-  let column = 0;
-  let index = 0;
   const doc = editor.document;
   const fullText = doc.getText();
+  let index = 0;
 
+  /**
+   * Adding a token to all our collections
+   * @param t -The token to add
+   */
   const addToken = (t:TokenData) => {
     if (!collection.byType.has(t.type))collection.byType.set(t.type,new Set());
     collection.all.add(t);
@@ -82,37 +83,45 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     index++;
   };
 
-  const generateMissingProperty = (offset?:number,idx?:number,tok?:TokenData) => {
+  /**
+   * Funny story: In JS and TS, if a key name of a type isn't specified explicitly (as in `Record<string,any>`),
+   * VSCode actually doesn't create a semantic token for it. These general properties are only highlighted via TextMate.  
+   * But that means we can't (natively) style them, so as a workaround we attempt to parse the space between tokens for
+   * potential missing properties and adding them "manually".
+   * @param offset -
+   * @param idx -
+   * @param tok -
+   */
+  const generateMissingProperties = (offset?:number,idx?:number,tok?:TokenData) => {
+    if (!collection.all.size || !mightMissProps.has(doc.languageId)) return;
     const lasToken = tok ?? collection.all.values().drop((idx??collection.all.size)-1).next().value;
     if (!lasToken || lasToken.modifiers.includes('declaration') || !hasFields.has(lasToken.type.toLowerCase() as SymbolToken)) return;
     const currentOffset = offset??fullText.length;
     if (currentOffset-lasToken.offset < 3) return;
-    const propex = {
+    const propertyRegex = {
       javascript:/^(\s*\??\.\s*)(\w+\(?)/,
       typescript:/^(\s*?[!?]?\.\s*?)(\w+\(?)/
     }[doc.languageId];
-    if (!propex) return;
+    if (!propertyRegex) return;
     const newStart = lasToken.offset+lasToken.name.length;
     const between = fullText.slice(newStart,currentOffset);
-    const propMatch = propex.exec(between);
+    const propMatch = propertyRegex.exec(between);
     if (!propMatch) return;
     const start = newStart+propMatch[1].length;
     const word = propMatch[2];
     if (!word.length || word.trim().length !== word.length) return;
     const isMethod = word.endsWith('(');
     const end = start + word.length -(isMethod?1:0);
-    const subRange = new Range(doc.positionAt(start),doc.positionAt(end));
-    const token:TokenData = {index:idx ?? collection.all.size,modifiers:[],name:word.slice(0,isMethod?-1:undefined),type:isMethod?'method':'property',offset:start, range:subRange
+    const token:TokenData = {index:idx ?? collection.all.size,modifiers:[],name:word.slice(0,isMethod?-1:undefined),type:isMethod?'method':'property',offset:start, range:new Range(doc.positionAt(start),doc.positionAt(end))
     };
     addToken(token);
-    return token;
+    //If we found a token which could have further missing properties, we call the function with the same offset until we have them all.
+    if (hasFields.has(token.type.toLowerCase() as any)) generateMissingProperties(offset,idx,token);
   };
 
-  const getMissingProps = (o?:number,i?:number) => {
-    if (!collection.all.size || !mightMissProps.has(doc.languageId)) return;
-    let propator = generateMissingProperty(o,i);
-    while (propator && hasFields.has(propator.type.toLowerCase() as any)) propator = generateMissingProperty(o,i,propator);
-  };
+  const recordSize = 5;
+  let line = 0;
+  let column = 0;
 
   for (let i = 0; i < data.data.length; i += recordSize) {
     const [deltaLine, deltaColumn, length, kindIndex, modifierIndex] = data.data.slice(i, i + recordSize);
@@ -127,11 +136,11 @@ export function rangesByName(data:vscode.SemanticTokens, legend:vscode.SemanticT
     const range = new vscode.Range(line, column, line, column + length);
     const name = doc.getText(range);
     const offset=doc.offsetAt(range.start);
-
-    getMissingProps(offset,index);
+    //Looking for missing property token between this token and the previous.
+    generateMissingProperties(offset,index);
     addToken({range, name, modifiers, type: kind,index, offset});
   }
-  getMissingProps();
-
+  //This generates missing properties after the last token.
+  generateMissingProperties();
   return collection;
 }
