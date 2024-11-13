@@ -1,0 +1,71 @@
+// This is the example CHSS file for the source code of the CHSS extension. It felt fitting to demonstrate CHSS on itself.
+
+<="deco*"=variable:readonly>{
+color:rgb(64, 112, 214)
+}
+
+[variable] {
+  color:rgb(203, 128, 128)
+}
+
+[variable]:readonly {
+  color:darken(7)
+}
+
+[property]{
+  color:rgb(188, 208, 159)
+}
+
+[method]{
+  color:rgb(140, 180, 176)
+}
+
+[parameter] {
+  color:rgb(200, 139, 96)
+}
+
+:declaration {
+  font-style: italic;
+}
+
+DecorationManager:declaration > [method]:declaration, #decorator > [method]{
+  color:rgb(35, 162, 201)
+} 
+ChssParser:declaration > [method]:declaration, #parser > [method]{
+  color:rgb(227, 125, 62)
+} 
+
+.getConfig{
+  color:rgb(130, 104, 214)
+}
+
+<"/selector/i"> {
+  color:rgb(119, 185, 97)
+}
+<"/range/i"> {
+  color:rgb(206, 161, 57)
+}
+<"/token/i"> {
+  color:rgb(57, 139, 206)
+}
+
+workspace <^="onDid"> {
+  color:rgb(201, 201, 142)
+}
+
+<modifier*>{
+  color:rgb(84, 154, 84)
+}
+
+<="*with"=method:defaultLibrary>, length:defaultLibrary{
+  color:rgb(209, 211, 162)
+}
+
+
+entries[method],map[method],filter[method],find[method],reduce[method]{
+  color:rgb(121, 110, 214)
+}
+
+#name, name[property] {
+  color:rgb(190, 62, 39)
+}
