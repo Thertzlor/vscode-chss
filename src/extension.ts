@@ -25,6 +25,8 @@ export async function activate(context:ExtensionContext) {
   const main = async() => {
     const parser = new ChssParser(workspace.workspaceFolders?.[0]?.uri);
     const decorator = new DecorationManager(parser);
+    let styleTime = 0;
+    const timeMap = new Map<string,number>();
 
     const debounceVal = 100;
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
@@ -36,14 +38,18 @@ export async function activate(context:ExtensionContext) {
     processAll();
 
     context.subscriptions.push(
-      window.onDidChangeActiveTextEditor(e => (decorator.decorations.has(e?.document.uri.toString()??'')?decorator.reApply(e):decorator.processEditor(e,false,rules,insensitive,debugMode))),
+      window.onDidChangeActiveTextEditor(e => (decorator.decorations.has(e?.document.uri.toString()??'')&& (timeMap.get(e!.document.uri.toString()) ?? 0 > styleTime)?decorator.reApply(e):decorator.processEditor(e,false,rules,insensitive,debugMode))),
       workspace.onDidChangeTextDocument(e => {
         if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
         if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
+          styleTime = Date.now();
           rules = parser.parseChss(e.document.getText());
           processAll();
         }
-        else throttledEditor(undefined,false,rules,insensitive,debugMode);
+        else {
+          timeMap.set(e.document.uri.toString(),Date.now());
+          throttledEditor(undefined,false,rules,insensitive,debugMode);
+        }
       }),
       workspace.onDidChangeConfiguration(
         async(e:ConfigurationChangeEvent) => {
