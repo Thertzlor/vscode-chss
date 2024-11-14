@@ -27,6 +27,19 @@ const tokenToSymbol = ({range,name}:TokenData):DocumentSymbol => ({range,childre
  * @param token - A semantic token associated with the symbol.
  */
 const getNodeType = (sym:DocumentSymbol,token?:TokenData) => (token?.type??SymbolKind[sym.kind].toLowerCase()) as TokenKind;
+
+
+const convertModifier = (m:string,grouped:boolean) =>
+    //"none" excludes any other modifiers, so if it paired with anything, we prevent the selector from matching at all.
+  (m === 'none'?grouped?':not(*)':
+        //How do we match "no modifiers"? By excluding all class attributes with spaces, which means there's only a type class.
+  ':not([class*=" "])':
+        //Regular modifiers are regular multi class selectors.
+  `.${m}`);
+
+
+const isPseudoClass = (m:string) => m === 'empty' || m.includes('-')|| m.includes('(');
+
 export class DomSimulator{
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
@@ -71,7 +84,7 @@ export class DomSimulator{
       if (noNest.has(nodeType)) for (const cc of sym.children.sort(symbolSort)) encodeNode(cc,parent);
       else {
         //In this section we encode all information we have on the token onto an HTML element, we can query via CSS later.
-        const current = parent.appendChild(document.createElement('div')) as HTMLDivElement;
+        const current = parent.appendChild(document.createElement(`code-${nodeType}`)) as HTMLDivElement;
         processedRanges.set(rangeIdent,[current,range]);
         current.id = `o${semant?.offset ?? nodeOffset}`;
         current.setAttribute('data-namerange', rangeIdent);
@@ -125,12 +138,26 @@ export class DomSimulator{
    * @param notRanges - An array of offsets to include elemens from the match based on :not() selectors
    * @param caseInsensitive - If true matches names case insensitively.
    */
-  public selectorToCSS({match,name,type,modifiers,combinator}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[],caseInsensitive=false){
+  public selectorToCSS({match,name,type,modifiers,combinator,regexp}:ParsedSelector,prevSelectors=[''],regexOffsets?:number[],notRanges?:number[],caseInsensitive=false){
+    if (regexp && !regexOffsets?.length) return ['#invalid'];
     /**For making attribute selectors case insensitive */
+    const pseudoClasses = [] as string[];
+    const modifierAlterations = [] as string[][];
+    const modifierClasses = [] as string[];
+    for (const mods of modifiers) {
+      for (let index = mods.findIndex(isPseudoClass); index !==-1; index = mods.findIndex(isPseudoClass)) pseudoClasses.push(mods.splice(index)[0]);
+      if (!mods.length) continue;
+      if (mods.length === 1) modifierClasses.push(mods[0]);
+      else modifierAlterations.push(mods);
+    }
     const flag = caseInsensitive?' i':'';
     /**Filtering out the star selector to simplify things.*/
     const finalTypes = type.filter(f => f!=='*');
     let selectorStrings = prevSelectors;
+    //Type selectors work the same as modifiers, without the complication of "none".
+    if (finalTypes.length) selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}code-${t}`));
+    //We resolve :not() matches separately into offset based IDs and exclude them.
+    //The reason is that they can most likely be resolved with tokens, which is cheaper than exponentially expanding this selector.
     //CSS can't handle complex regex matches, so we resolve them on a token basis,
     //parse the offsets to IDs and restrict our selection to them using a snazzy double negation.
     if (match === 'match' && regexOffsets?.length)selectorStrings = selectorStrings.map(s => `${s}:not(:not(${regexOffsets.map(n => `#o${n}`).join(',')}))`);
@@ -139,17 +166,12 @@ export class DomSimulator{
     else if (name && name !== '*') selectorStrings = selectorStrings.map(s => `${s}[data-name="${name}"${flag}]`);
     //Modifiers and types are classes, so we chain them with `.`
     //Because there can be multiple of each, we flatMap into multiple alterations, expanding like SCSS.
-    if (modifiers.length) {selectorStrings = modifiers.flatMap(m => selectorStrings.map(
-      s => (
-        //"none" excludes any other modifiers, so if it paired with anything, we prevent the selector from matching at all.
-        m.includes('none')?m.length!==1?`${s}:not(*)`:
-        //How do we match "no modifiers"? By excluding all class attributes with spaces, which means there's only a type class.
-        `${s}:not([class*=" "])`:
-        //Regular modifiers are regular multi class selectors.
-        `${s}.${m.join('.')}`)
-    ));}
+    if (modifierClasses.length) selectorStrings = selectorStrings.map(s => `${s}${modifierClasses.map(m => convertModifier(m, modifierClasses.length!==1)).join('')}`);
+    if (modifierAlterations.length) {selectorStrings = modifierAlterations.map(
+      a => a.map(m => selectorStrings.map(s => `${s}${convertModifier(m, false)}`))
+    ).flat(2);}
     //Type selectors work the same as modifiers, without the complication of "none".
-    if (finalTypes.length) selectorStrings = finalTypes.flatMap(t => selectorStrings.map(s => `${s}.${t}`));
+    if (pseudoClasses.length) selectorStrings = selectorStrings.map(s => `${s}:${pseudoClasses.join(':')}`);
     //We resolve :not() matches separately into offset based IDs and exclude them.
     //The reason is that they can most likely be resolved with tokens, which is cheaper than exponentially expanding this selector.
     if (notRanges?.length) selectorStrings = selectorStrings.map(s => `${s}:not(${notRanges.map(n => `#o${n}`).join(',')})`);
@@ -158,6 +180,7 @@ export class DomSimulator{
     if (combinator && combinator !== ',') selectorStrings = selectorStrings.map(s => `${s} ${combinator} `);
     return selectorStrings;
   }
+
 
   public matchesFromCSS(selector:string,full=false):MatchPair{
     //The neat thing about re-creating the DOM at every edit is that we know that the matched elements can't change during one "session".
@@ -170,7 +193,7 @@ export class DomSimulator{
   /** HTML output for the debug view.*/
   public getHtml(){
     return /*html*/`
-      <!DOCTYPE html> <html><head> <style> html,body{background:white; width:100%; text-align:center; padding: 1em 0; font-size:0.95em } div {border-radius:.3em; margin: .5em; padding: .2em; width: 90%; border:.15em solid rgba(0, 0, 0, 0.150); background: rgba(0, 0, 0, 0.050); min-height: 1em; display:inline-block; color:#a52634; text-align:center; position:relative } div::after{content: "[" attr(class) "]"; display:block; position:absolute; top: .2em; left:.2em} div::before { display: block; font-weight: bold; content: attr(data-name); } </style> </head> <body> ${this.document.body.innerHTML} </body> </html>
+      <!DOCTYPE html> <html><head> <style> html,body{background:white; width:100%; text-align:center; padding: 1em 0; font-size:0.95em } [data-namerange] {border-radius:.3em; margin: .5em; padding: .2em; width: 90%; border:.15em solid rgba(0, 0, 0, 0.150); background: rgba(0, 0, 0, 0.050); min-height: 1em; display:inline-block; color:#a52634; text-align:center; position:relative } [data-namerange]::after{content: "[" attr(class) "]"; display:block; position:absolute; top: .2em; left:.2em} [data-namerange]::before { display: block; font-weight: bold; content: attr(data-name); } </style> </head> <body> ${this.document.body.innerHTML} </body> </html>
     `;
   }
 
