@@ -23,13 +23,14 @@ const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin',
 const pseudos = ['before', 'after', 'light', 'dark'] as const;
 
 
-const matchName = (name:string,type:MatchType,val:string,reg?:RegExp) => (reg?reg.test(name):!!name[type](val));
+const matchName = (name:string,type:MatchType,val:string,reg?:RegExp) => (name.includes('ort') && console.log(name),reg?reg.test(name):!!name[type](val));
 
 /**
- * Determines if a selector group is linked with combinators other than `,`
+ * Determines if a selector group is linked with combinators other than `,`  
+ * A  selector is also complex if it uses pseudoclasses that are not :not()
  * @param selectors -A group of CHSS selector objects
  */
-const isCompound = (selectors:ParsedSelector[]) => selectors.some(s => s.combinator && s.combinator !== ',');
+const isComplex = (selectors:ParsedSelector[]) => selectors.some(s => (s.combinator && s.combinator !== ',') || s.modifiers.flat().some(m => m ==='empty'||m.includes('(')||m.includes('-')));
 
 /**
  * Determines if the modifiers on a token match a list of modifier groups.
@@ -70,7 +71,7 @@ export class ChssParser{
    * A gnarly minimal parser for pseudo css.
    * @param source -The source code of the file
    */
-  public parseChss(source:string){
+  public parseChss(source:string,insensitive:boolean){
     setFreshStyle();
     const res = [] as ChssRule[];
     let skipNext = false;
@@ -95,7 +96,7 @@ export class ChssParser{
         }
         //By increasing the base Specificity, we make sure that scoped rules always beat out non-scoped rules.
         const baseVal:Specificity = currentScope?[1,0,0]:[0,0,0];
-        const selectors= this.stringToSelectors(value,baseVal);
+        const selectors= this.stringToSelectors(value,baseVal,insensitive);
         //No valid selectors found.
         if (!selectors.length){skipNext = true; continue;}
 
@@ -129,7 +130,7 @@ export class ChssParser{
       //We are skipping any rules not scoped to the current document.
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
       //We go through each selector and find out, which ranges we match with which specificity.
-      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isCompound(selectors), rangeObject,insensitive,doc,debug)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
+      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isComplex(selectors), rangeObject,insensitive,doc,debug)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
     }
 
     for (const current of matched){
@@ -163,9 +164,9 @@ export class ChssParser{
    * @param sourceString - The string to parse.
    * @param baseSpecificity - The minimum specificity any returned selector will have.
    */
-  private stringToSelectors(sourceString:string,baseSpecificity:Specificity = [0,0,0]){
+  private stringToSelectors(sourceString:string,baseSpecificity:Specificity = [0,0,0],insensitive:boolean){
     // This regex is getting pretty nuts.
-    const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?::\w+(?:\([^)]*?\))?)*|<[^>]+?>|(?::\w+(?:\([^)]*?\))?)+|\[[^]*?]+(?::+\w+(?:\([^)]*?\))?)*|\*(?:$|\s)/g;
+    const rulEx = /[#.]?\w+(?:\[[^]*?]+)?(?:::?[\w/-]+(?:\([^)]*?\))?)*|<[^>]+?>|(?::[\w/-]+(?:\([^)]*?\))?)+|\[[^]*?]+(?:::?[\w/-]+(?:\([^)]*?\))?)*|\*(?:$|\s)/g;
     const selectorMatches = [];
     const combinators = [];
     let lastMatch = 0;
@@ -176,13 +177,12 @@ export class ChssParser{
       lastMatch = selectMatch.index+mainMatch.length;
       if (mainMatch.length)selectorMatches.push(mainMatch);
     }
-
     const processedSelectors = [] as ParsedSelector[];
 
     /**If we have selectors with combinators, their specificity is combined */
     let combinedSpecificity=baseSpecificity;
     for (const [j,m] of selectorMatches.entries()){
-      const parsed = this.parseSingleSelector(m,combinedSpecificity,combinators[j]);
+      const parsed = this.parseSingleSelector(m,insensitive,combinedSpecificity,combinators[j]);
       if (
         //Handling selectors that are either generally invalid or have pseudo selectors in invalid positions.
         ((parsed.pseudo || parsed.invalid) && parsed.combinator && parsed.combinator !== ',') ||
@@ -207,7 +207,7 @@ export class ChssParser{
    * @param baseSpecifity - Minimum specificity the selector will have.
    * @param combinator - The combinator that will follow this selector
    */
-  private parseSingleSelector(stringSelector:string,baseSpecifity:Specificity=[0,0,0],combinator?:string):ParsedSelector{
+  private parseSingleSelector(stringSelector:string,caseInsensitive:boolean,baseSpecifity:Specificity=[0,0,0],combinator?:string):ParsedSelector{
     /**The invalid selector that is returned, if we can't parse the string contents.  All fields are blank, only the  */
     const invalid = {specificity:[-1,-1,-1] as Specificity, name:'', type:[''],modifiers:[],notSelectors:[], combinator,invalid:true};
     const pseudo = pseudos.find(b => stringSelector.includes(`::${b}`));
@@ -230,7 +230,7 @@ export class ChssParser{
     const notSelectors = [] as ParsedSelector[][];
     for (const not of nots) {
       // recursion! ...but :not() can't be nested, so it can't be infinite.
-      const np = this.stringToSelectors(not,currentSpecifity);
+      const np = this.stringToSelectors(not,currentSpecifity,caseInsensitive);
       // If one :not() selector is invalid the whole selector is invalid
       if (np.some(n => n.invalid)) return invalid;
       notSelectors.push(np);
@@ -274,27 +274,29 @@ export class ChssParser{
       const value = content || operator;
       //The advanced match NEEDS either a RegEx or wildcards, otherwise just use a plain name. 
       if (matchType === 'match' && (!value.includes('*') && !/^\/.+\/i?$/.test(value))) return invalid;
-      const insensitive = value.endsWith('/i');
+      const iFlag = value.endsWith('/i');
+      const finalSensititivy = value.startsWith('/')?iFlag:caseInsensitive;
 
-      const regexp=matchType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,insensitive?-2:-1):`^${value.replaceAll('*','.*')}$`,insensitive && value.startsWith('"')?'i':undefined):undefined;
+      const regexp=matchType === 'match'?new RegExp(value.startsWith('/')?value.slice(1,iFlag?-2:-1):`^${value.replaceAll('*','.*')}$`,finalSensititivy ?'i':undefined):undefined;
+      console.log(regexp,regexp?.flags);
 
       let typeFilter = subSelector;
       //Here we resolve the plain selector into a valid [type] selector, including :modifiers, if present.
-      if (subSelector) typeFilter = subSelector.includes(':') ? ((c = subSelector.indexOf(':')) => `[${subSelector.slice(0,c)}]${subSelector.slice(c)}`)() : `[${subSelector}]`;
+      if (subSelector) typeFilter = subSelector.includes(':') ? ((c = subSelector.indexOf(':')) => `[${subSelector.slice(0,c)||'*'}]${subSelector.slice(c)}`)() : `[${subSelector||'*'}]`;
 
       // We parse the subselector, and adds its specificity to the main selector.
-      const {invalid:inv,type=['*'],modifiers=[],specificity=[0,0,0]} = subSelector? this.parseSingleSelector(typeFilter,currentSpecifity):{};
+      const {invalid:inv,type=['*'],modifiers=[],specificity=[0,0,0]} = subSelector? this.parseSingleSelector(typeFilter,caseInsensitive,currentSpecifity):{};
       if (inv) return invalid;
       return {specificity:sumSpecificity(specificity,[0,matchSpecificty[matchType],0]), name:value, type,modifiers,regexp,match:matchType,pseudo,notSelectors,combinator};
     }
     // general type: [variable]
-    if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:sumSpecificity(currentSpecifity,[0,1,0]), name:'', type:selector.slice(1,-1).split('/').map(t => t.trim()),modifiers:[],pseudo,notSelectors,combinator};
+    if (selector.startsWith('[') && selector.endsWith(']')) return {specificity:sumSpecificity(currentSpecifity,[0,1,0]), name:'', type:(selector.slice(1,-1)||'*').split('/').map(t => t.trim()),modifiers:[],pseudo,notSelectors,combinator};
     // extended type with one or more modifiers: [variable]:readonly
     if (selector.startsWith('[')){
       const [sel='',...modifiers] = selector.split(':');
 
       if (!modifiers.length || !sel.endsWith(']')) return invalid;
-      return {specificity:sumSpecificity(currentSpecifity,[0,1,modifiers.length]), name:'', type:sel.slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo,notSelectors,combinator};
+      return {specificity:sumSpecificity(currentSpecifity,[0,1,modifiers.length]), name:'', type:(sel.trim()||'*').slice(1,-1).split('/').map(t => t.trim()),modifiers:modifiers.map(m => m.split('/')),pseudo,notSelectors,combinator};
     }
     //compound: name[variable]:readonly
     if (selector.includes('[') && selector.includes(']')){
@@ -303,17 +305,17 @@ export class ChssParser{
 
       if (!type) return invalid;
       // Returning a selector without modifiers
-      if (!mods) return {specificity:sumSpecificity(currentSpecifity,[1,1,0]), name, type:type.split('/').map(t => t.trim()),modifiers:[],notSelectors,combinator};
+      if (!mods) return {specificity:sumSpecificity(currentSpecifity,[1,1,0]), name, type:(type.trim()||'*').split('/').map(t => t.trim()),modifiers:[],notSelectors,combinator};
       const splitMods = mods.split(':').filter(s => s);
       //More modifiers = more specific
-      return {specificity:sumSpecificity(currentSpecifity,[1,1,mods.length]), name, type:type.split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
+      return {specificity:sumSpecificity(currentSpecifity,[1,1,mods.length]), name, type:(type.trim()||'*').split('/').map(t => t.trim()),modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
     }
     if (selector.includes('[') || selector.includes(']')) return invalid;
     // name with modifiers: variable:modifier
     const [ident, ...splitMods] = selector.split(':');
 
     if (!ident) return splitMods.length? {specificity:sumSpecificity(currentSpecifity,[0,0,splitMods.length]), name:'', type:['*'],modifiers:splitMods.map(m => m.split('/').map(t => t.trim())),pseudo,notSelectors,combinator}:invalid;
-    const {specificity,name,type,invalid:inv} = ident!=='/'?this.parseSingleSelector(ident,currentSpecifity):invalid;
+    const {specificity,name,type,invalid:inv} = ident!=='/'?this.parseSingleSelector(ident,caseInsensitive,currentSpecifity):invalid;
     if (inv) return invalid;
     return {specificity:sumSpecificity(specificity,[0,0,splitMods.length]), name, type,modifiers:splitMods.map(m => m.split('/')),pseudo,notSelectors,combinator};
   }
@@ -353,7 +355,7 @@ export class ChssParser{
         //If the target has an unknown type, we can skip it.
         if (!tokenOject.byType.has(targetType) && targetType !== '*') continue;
         for (const {name,range,modifiers,offset} of targetType === '*'?tokenOject.all:tokenOject.byType.get(targetType)!) {
-          const [tName,sName] = [name,parsed.name].map(s => (insensitive?s.toLowerCase():s));
+          const [tName,sName] = [name,parsed.name].map(s => (insensitive && !parsed.regexp?s.toLowerCase():s));
           //Main comparison logic for name and modifier matching.
           if ((!sName || sName === tName || (parsed.match && matchName(tName,parsed.match, sName,parsed.regexp))) && rightModifiers(parsed.modifiers,modifiers) && !antiRanges.includes(offset)){
             matches[0].push(range);
@@ -387,13 +389,14 @@ export class ChssParser{
       const finalSelectors = [] as string[];
       const finalParsed = [] as ParsedSelector[];
       for (const group of selectorGroups){
-        let accumulator = ['div'] as string[];
+        let accumulator = [''] as string[];
         //Turning the selector into CSS
         for (const element of group) accumulator = dom.selectorToCSS(element,accumulator,element.regexp?(await tokenOnlyMatch(element))[1]:undefined,await this.getNotMatches(element, tokenOject, insensitive, doc),insensitive);
         finalSelectors.push(accumulator.join(', '));
         //The last selector in the group will have the highest specificity, which will be used to resolve conflicts.
         finalParsed.push(group.at(-1)!);
       }
+      console.log(...finalSelectors);
       //Here, we get the actual token ranges, translated from the attributes encoded in the DOM nodes.
       return finalSelectors.map((fn, i) => ((mp = dom.matchesFromCSS(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as FullMatch)());
     };
@@ -412,7 +415,7 @@ export class ChssParser{
    * @returns An array of offsets
    */
   private async getNotMatches(element:ParsedSelector, tokens:TokenCollection, insensitive?:boolean, doc?:TextDocument) {
-    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompound(sels), tokens, insensitive, doc)))).flat().flatMap(p => p[2]) : [];
+    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isComplex(sels), tokens, insensitive, doc)))).flat().flatMap(p => p[2]) : [];
   }
 
   /**

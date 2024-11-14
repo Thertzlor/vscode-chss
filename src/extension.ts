@@ -28,7 +28,7 @@ export async function activate(context:ExtensionContext) {
 
     const debounceVal = 100;
     const chssText = new TextDecoder().decode(await workspace.fs.readFile(chssFile!));
-    let rules = parser.parseChss(chssText);
+    let rules = parser.parseChss(chssText,insensitive);
     const processAll = debounce(() => {for (const e of window.visibleTextEditors) decorator.processEditor(e,true,rules,insensitive,debugMode);},debounceVal);
     const throttledEditor = debounce((...args:Parameters<DecorationManager['processEditor']>) => decorator.processEditor(...args) ,debounceVal);
 
@@ -40,7 +40,7 @@ export async function activate(context:ExtensionContext) {
       workspace.onDidChangeTextDocument(e => {
         if (e.document.fileName !== window.activeTextEditor?.document.fileName) return;
         if (e.document.uri.toString() === chssFile?.toString() && (directUpdate || !e.document.isDirty)) {
-          rules = parser.parseChss(e.document.getText());
+          rules = parser.parseChss(e.document.getText(),insensitive);
           processAll();
         }
         else {
