@@ -1,6 +1,6 @@
-import {hasFields, mightMissProps, rangeToIdentifier} from './helperFunctions';
+import {hasFields, mightMissProps} from './helperFunctions';
 import {Range} from 'vscode';
-import type {SymbolToken} from './helperFunctions';
+import type {TokenKind} from './helperFunctions';
 import type {SemanticTokens, SemanticTokensLegend, TextEditor} from 'vscode';
 // import { tokenKinds } from '../configuration';
 
@@ -64,9 +64,9 @@ import type {SemanticTokens, SemanticTokensLegend, TextEditor} from 'vscode';
  * *NOTE*: If the provider cannot temporarily compute semantic tokens, it can indicate this by throwing an error with the message 'Busy'.
  */
 export type TokenData = {name:string,range:Range,modifiers:string[],type:string,index:number, offset:number};
-export type TokenCollection = {byType:Map<string,Set<TokenData>>, byRange:Map<string,TokenData|undefined>,all:Set<TokenData>};
+export type TokenCollection = {byType:Map<string,Set<TokenData>>, byOffset:Map<number,TokenData|undefined>,all:Set<TokenData>};
 export function rangesByName(data:SemanticTokens, legend:SemanticTokensLegend, editor:TextEditor) {
-  const collection:TokenCollection= {byRange:new Map(),all:new Set(),byType:new Map()};
+  const collection:TokenCollection= {byOffset:new Map(),all:new Set(),byType:new Map()};
   const doc = editor.document;
   const fullText = doc.getText();
   let index = 0;
@@ -78,7 +78,7 @@ export function rangesByName(data:SemanticTokens, legend:SemanticTokensLegend, e
   const addToken = (t:TokenData) => {
     if (!collection.byType.has(t.type))collection.byType.set(t.type,new Set());
     collection.all.add(t);
-    collection.byRange.set(rangeToIdentifier(t.range),t);
+    collection.byOffset.set(t.offset,t);
     collection.byType.get(t.type)!.add(t);
     index++;
   };
@@ -95,7 +95,7 @@ export function rangesByName(data:SemanticTokens, legend:SemanticTokensLegend, e
   const generateMissingProperties = (offset?:number,idx?:number,tok?:TokenData) => {
     if (!collection.all.size || !mightMissProps.has(doc.languageId)) return;
     const lasToken = tok ?? collection.all.values().drop((idx??collection.all.size)-1).next().value;
-    if (!lasToken || lasToken.modifiers.includes('declaration') || !hasFields.has(lasToken.type.toLowerCase() as SymbolToken)) return;
+    if (!lasToken || lasToken.modifiers.includes('declaration') || !hasFields.has(lasToken.type.toLowerCase() as TokenKind)) return;
     const currentOffset = offset??fullText.length;
     //In this case we know there's no space for another token.
     if (currentOffset-lasToken.offset < 3) return;

@@ -2,7 +2,7 @@ import {Range} from 'vscode';
 import type {SymbolKind,Uri} from 'vscode';
 import type {Pseudo} from './chssParser';
 export type RangeIdentifier = ReturnType<typeof rangeToIdentifier>;
-export type SymbolToken = Lowercase<keyof typeof SymbolKind>|'parameter'|'type';
+export type TokenKind = Lowercase<keyof typeof SymbolKind>|'parameter'|'type';
 
 const rts = new WeakMap<Range,string>();
 const str = new Map<string,Range>();
@@ -24,8 +24,8 @@ export const accessors = new Map(([
   ['lua',['.',':']]
 ] as any as [string,string[]]).map(([t,a]) => [t,new Set(a)]));
 
-export const hasFields = new Set<SymbolToken>(['class','property','variable','object','parameter','namespace']);
-export const isField = new Set<SymbolToken>(['property','method','function']);
+export const hasFields = new Set<TokenKind>(['class','property','variable','object','parameter','namespace']);
+export const isField = new Set<TokenKind>(['property','method','function']);
 
 export const rangeToIdentifier = (r:Range,pseudo?:Pseudo) => (!pseudo && rts.has(r)?rts.get(r)!:(({start,end} = r) => ((s=`${start.line}|${start.character}|${end.line}|${end.character}${pseudo?`|${pseudo}` as const:'' as const}` as const) => (!pseudo && rts.set(r,s) , s))())());
 

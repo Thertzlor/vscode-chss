@@ -4,14 +4,29 @@ import {rangeToIdentifier,identifierToRange, accessors, isField, hasFields} from
 import type {DocumentSymbol,Uri, TextDocument} from 'vscode';
 import type {HTMLElement,HTMLDivElement} from 'linkedom';
 import type {TokenCollection, TokenData} from './rangesByName';
-import type {SymbolToken} from './helperFunctions';
+import type {TokenKind} from './helperFunctions';
 import type {MatchPair, ParsedSelector} from './chssParser';
 
-type SymbolData = {tk:TokenData,sy:DocumentSymbol,tp:SymbolToken};
-
+type SymbolData = {tk:TokenData,sy:DocumentSymbol,tp:TokenKind};
+/**
+ * Sorts symbols by comparing their ranges.
+ * @param a - a symbol
+ * @param b - another symbol
+ */
 const symbolSort = (a:{range:Range},b:{range:Range}) => a.range.start.compareTo(b.range.start);
+
+/**
+ * Using this function we can pretend that a token is actually a DocumentSymbol.
+ * @param token - The token to convert 
+ */
 const tokenToSymbol = ({range,name}:TokenData):DocumentSymbol => ({range,children:[],selectionRange:range,name,detail:'generated',kind:SymbolKind.Variable});
-const getNodeType = (sym:DocumentSymbol,token?:TokenData) => (token?.type??SymbolKind[sym.kind].toLowerCase()) as SymbolToken;
+
+/**
+ * Uses either semantic token or symbol information to get the type of a node.
+ * @param sym - A documentSymbol
+ * @param token - A semantic token associated with the symbol.
+ */
+const getNodeType = (sym:DocumentSymbol,token?:TokenData) => (token?.type??SymbolKind[sym.kind].toLowerCase()) as TokenKind;
 export class DomSimulator{
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
@@ -20,17 +35,19 @@ export class DomSimulator{
 
   private constructor(
     symbols:DocumentSymbol[],
-    {all,byRange}:TokenCollection,
+    {all,byOffset}:TokenCollection,
     public readonly uri:Uri,
     readonly stringContent:TextDocument,
     readonly lang = stringContent.languageId,
+    /**A LinkeDOM document that we use to recreate our document structure */
     private readonly document = (new DOMParser()).parseFromString('<html><head></head><body></body></html>', 'text/html'),
     private readonly queryMap = new Map<string,MatchPair>()
   ){
     const tokenIndex = new Set<number>();
-    const collapsable = new Set<SymbolToken>(['variable','constant']);
+    const collapsable = new Set<TokenKind>(['variable','constant']);
     const processedRanges = new Map<string,[HTMLDivElement,Range]>();
     const allTokens = new Set(all);
+    const currentAccessors = accessors.get(lang);
     /**
      * Sorting the child Elements of a DOM node into the same order the tokens were in the document.
      * @param node - The parent element
@@ -39,7 +56,8 @@ export class DomSimulator{
       for (const c of node.children.sort((a:HTMLDivElement,b:HTMLDivElement) => processedRanges.get(a.getAttribute('data-namerange'))![1].start.compareTo(processedRanges.get(b.getAttribute('data-namerange'))![1].start))) node.appendChild(c);
     };
 
-    const encodeNode = (sym:DocumentSymbol,parent:HTMLElement,tokenData?:TokenData,manualType?:SymbolToken,top=false) => {
+    const encodeNode = (sym:DocumentSymbol,parent:HTMLElement,tokenData?:TokenData,manualType?:TokenKind,top=false) => {
+      /** We don't care about abstract unnamed constructs like blocks or conditions, we encode their children as children of their parent symbols */
       const noNest = new Set(['package','keyword','other']);
       const fullRange = sym.range;
       //Anonymous functions have their entire body declared as selectionRange, which we don't want. So we reduce it to an zero length range.
@@ -47,36 +65,47 @@ export class DomSimulator{
       const rangeIdent = rangeToIdentifier(range);
       if (processedRanges.has(rangeIdent)) return;
       const rangeIdentFull = rangeToIdentifier(fullRange);
-      const semant = tokenData ?? byRange.get(rangeToIdentifier(range));
+      const nodeOffset = stringContent.offsetAt(range.start);
+      const semant = tokenData ?? byOffset.get(nodeOffset);
       const nodeType = manualType ?? getNodeType(sym,semant);
       if (noNest.has(nodeType)) for (const cc of sym.children.sort(symbolSort)) encodeNode(cc,parent);
       else {
+        //In this section we encode all information we have on the token onto an HTML element, we can query via CSS later.
         const current = parent.appendChild(document.createElement('div')) as HTMLDivElement;
         processedRanges.set(rangeIdent,[current,range]);
-        current.id = `o${semant?.offset ?? stringContent.offsetAt(range.start)}`;
+        current.id = `o${semant?.offset ?? nodeOffset}`;
         current.setAttribute('data-namerange', rangeIdent);
         current.setAttribute('data-fullrange', rangeIdentFull);
         current.setAttribute('data-name', sym.name);
         current.className=semant?[nodeType, ...semant.modifiers].join(' '):nodeType;
-        const childList = sym.children.sort(symbolSort);
-        for (const c of childList) encodeNode(c,current);
-        if (semant)tokenIndex.add(semant.index);
+        //
+        for (const c of sym.children.sort(symbolSort)) encodeNode(c,current);
+        if (semant) tokenIndex.add(semant.index);
         const tokenSymbols = new Set<SymbolData>();
-        let currentData:SymbolData|undefined;
+        /**This keeps track of the current parent node while nesting properties */
+        let currentParent:SymbolData|undefined;
         // The tree of DocumentSymbols actually only tracks declarations of symbols. We fill in the rest from our token list.
-        for (const token of allTokens) {
+        for (const token of allTokens.keys().drop(semant?.index??0).take(allTokens.size)) {
+          //We skip all tokens that are not inside the current symbol.
           if (!top && fullRange.start.isAfterOrEqual(token.range.end)) continue;
+          // We abort once we find the first token outside the symbol.
           if (!top && (sym.children.length || !collapsable.has(nodeType)?fullRange:range).end.isBeforeOrEqual(token.range.start)) break;
+          // If we've already indexed a token it means that a child node has already included the token as a child of its own.
           if (tokenIndex.has(token.index)) continue;
           const sy = tokenToSymbol(token);
           const sData:SymbolData = {tk:token,sy,tp:getNodeType(sy,token)};
-          if (currentData && isField.has(sData.tp) && hasFields.has(currentData.tp) && accessors.get(lang)?.has(stringContent.getText(new Range(currentData.tk.range.end,sData.tk.range.start)).trim())){
-            currentData.sy.children.push(sData.sy);
+          //If the current token could be a child node of the current parent we add it to its list of children.
+          if (currentParent && isField.has(sData.tp) && hasFields.has(currentParent.tp) && currentAccessors?.has(stringContent.getText(new Range(currentParent.tk.range.end,sData.tk.range.start)).trim())){
+            currentParent.sy.children.push(sData.sy);
           } else tokenSymbols.add(sData);
-          currentData = hasFields.has(sData.tp)? sData:undefined;
+          //If the current *could* have children, we designate it as the current parent node.
+          currentParent = hasFields.has(sData.tp)? sData:undefined;
+          //Deleting the token to prevent processing it multiple times.
           allTokens.delete(token);
         }
+        //Finally encoding all tokens that are not part of our child symbols
         for (const {tk,sy,tp} of tokenSymbols) encodeNode(sy,current,tk,tp);
+        //correcting the order, so that the child nodes we encoded earlier aren't pushed to the top.
         sortChildren(current);
       }
     };

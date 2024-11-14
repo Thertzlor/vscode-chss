@@ -13,28 +13,44 @@ type ChssMatch = Omit<ProtoChssMatch,'colorActions'>;
 export type Pseudo = typeof pseudos[number];
 type ColorAction = typeof colorMods[number];
 
-type MiniMatch = [ranges:Range[],spec:Specificity,offs:number[],pseudo?:Pseudo];
+type FullMatch = [ranges:Range[],spec:Specificity,offs:number[],pseudo?:Pseudo];
 
 export type MatchPair = [Range[],number[]];
 type Specificity = [_id:number,_class:number,_type:number];
-
+/** A list of all valid color actions. */
 const colorMods = ['lighten','brighten','darken','desaturate','saturate','spin','greyscale','random'] as const;
+/** A list of all valid pseudo classes */
 const pseudos = ['before', 'after', 'light', 'dark'] as const;
+
 
 const matchName = (name:string,type:MatchType,val:string,reg?:RegExp) => (reg?reg.test(name):!!name[type](val));
 
-const isCompund = (selectors:ParsedSelector[]) => selectors.some(s => s.combinator && s.combinator !== ',');
+/**
+ * Determines if a selector group is linked with combinators other than `,`
+ * @param selectors -A group of CHSS selector objects
+ */
+const isCompound = (selectors:ParsedSelector[]) => selectors.some(s => s.combinator && s.combinator !== ',');
 
+/**
+ * Determines if the modifiers on a token match a list of modifier groups.
+ * @param modGroups - A list of modifier groups
+ * @param modifiers - A list of modifiers found on a token
+ */
 const rightModifiers = (modGroups:string[][],modifiers:string[]) => !modGroups.length || modGroups.every(group => !group.length || (group.includes('none')? !modifiers.length: modifiers.some(m => group.includes(m))));
 
 /**
- * Summing the specificity of two selectors, used for compounding.
+ * Summing the specificity of two selectors.
  * @param a - Selector 1
  * @param b - Selector 2
  * @returns The combined specificity.
  */
 const sumSpecificity = ([a1,b1,c1]:Specificity,[a2,b2,c2]:Specificity):Specificity => [a1+a2,b1+b2,c1+c2];
 
+/**
+ * Checks if one specificity array is more specific than another using the same logic as in regular CSS.
+ * @param specificityA - The first specificity
+ * @param specificityB - The second specificity
+ */
 const isMoreSpecific = ([i1,c1,t1]:Specificity,[i2,c2,t2]:Specificity) => {
   if (i1 !== i2) return i1>i2;
   if (c1 !== c2) return c1>c2;
@@ -50,7 +66,7 @@ export class ChssParser{
     private webview?:WebviewPanel
   ){}
 
-    /**
+  /**
    * A gnarly minimal parser for pseudo css.
    * @param source -The source code of the file
    */
@@ -113,7 +129,7 @@ export class ChssParser{
       //We are skipping any rules not scoped to the current document.
       if (scope && (!doc || !languages.match({pattern: this.baseUri? new RelativePattern(this.baseUri,scope):scope}, doc))) continue;
       //We go through each selector and find out, which ranges we match with which specificity.
-      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isCompund(selectors), rangeObject,insensitive,doc,debug)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
+      for (const [ranges,specificity,offsets,pseudo] of await this.selectorsToMatches(selectors, isCompound(selectors), rangeObject,insensitive,doc,debug)) {for (const [i,range] of ranges.entries()) matched.push({range,style,colorActions,pseudo,specificity,offset:offsets[i]});}
     }
 
     for (const current of matched){
@@ -311,7 +327,7 @@ export class ChssParser{
    * @param doc - The text document to be styled.
    * @param debug - If true, will trigger the WebView for our DOM.
    */
-  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,tokenOject:TokenCollection,insensitive?:boolean,doc?:TextDocument,debug=false):Promise<MiniMatch[]>{
+  private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,tokenOject:TokenCollection,insensitive?:boolean,doc?:TextDocument,debug=false):Promise<FullMatch[]>{
     //If we don't have our DOM, but we need it, we initialize it here.
     if (doc && complex &&!this.doms.has(doc.uri.toString())) this.doms.set(doc.uri.toString(), await DomSimulator.init(doc.uri, tokenOject,doc));
     // Debug WebView
@@ -352,7 +368,7 @@ export class ChssParser{
      * Resolves a group of selectors with token matching
      * @param selectorGroup - A group of CHSS selectors.
      */
-    const matchGroupWithTokens = (selectorGroup:ParsedSelector[]) => Promise.all(selectorGroup.map(parsed => tokenOnlyMatch(parsed).then(([r,o]) => [r,parsed.specificity,o,parsed.pseudo] as MiniMatch)));
+    const matchGroupWithTokens = (selectorGroup:ParsedSelector[]) => Promise.all(selectorGroup.map(parsed => tokenOnlyMatch(parsed).then(([r,o]) => [r,parsed.specificity,o,parsed.pseudo] as FullMatch)));
 
     /**
      * For Selectors with combinators, we transform them into CSS to match against or document DOM.
@@ -379,7 +395,7 @@ export class ChssParser{
         finalParsed.push(group.at(-1)!);
       }
       //Here, we get the actual token ranges, translated from the attributes encoded in the DOM nodes.
-      return finalSelectors.map((fn, i) => ((mp = dom.matchesFromCSS(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as MiniMatch)());
+      return finalSelectors.map((fn, i) => ((mp = dom.matchesFromCSS(fn)) => [mp[0], finalParsed[i].specificity, mp[1], finalParsed[i].pseudo] as FullMatch)());
     };
 
     // We only need the DOM for complex selectors.
@@ -396,7 +412,7 @@ export class ChssParser{
    * @returns An array of offsets
    */
   private async getNotMatches(element:ParsedSelector, tokens:TokenCollection, insensitive?:boolean, doc?:TextDocument) {
-    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompund(sels), tokens, insensitive, doc)))).flat().flatMap(p => p[2]) : [];
+    return element.notSelectors.length ? (await Promise.all(element.notSelectors.map(sels => this.selectorsToMatches(sels, isCompound(sels), tokens, insensitive, doc)))).flat().flatMap(p => p[2]) : [];
   }
 
   /**

@@ -12,6 +12,7 @@ export class DecorationManager{
     private readonly parser:ChssParser,
     /**Mapping stringified styles to specific text decorations, so they can be reused. */
     private readonly decoGlobal = new Map<string,TextEditorDecorationType>(),
+    /**For each URI we map a style to an array of ranges in that file.*/
     public readonly decorations = new Map<string,Map<string,Range[]>>()
   ){}
 
@@ -36,6 +37,7 @@ export class DecorationManager{
     const {uri} = textDocument;
     const uString = uri.toString();
     const currentDecorations = (this.decorations.has(uString)?this.decorations.get(uString):this.decorations.set(uString, new Map()).get(uString))!;
+    //Fetching all the data we need.
     const tokensData:SemanticTokens | undefined = await commands.executeCommand('vscode.provideDocumentSemanticTokens', uri);
     const legend:SemanticTokensLegend | undefined = await commands.executeCommand('vscode.provideDocumentSemanticTokensLegend', uri);
     if (!tokensData || !legend) return;
