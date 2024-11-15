@@ -103,18 +103,55 @@ Every property that accepts a color value can also accept a [color transformatio
 ### Combined selectors
 Type and name selectors can be combined such as `Example[class]` and modifier selectors can be combined with any other type, for example `foo:readonly`, `.getFoo:async` and a combination of all three types is possible as well (`Example[class]:declaration`) as long as the order of *name -> type -> modifier* is preserved.
 
->**Note:** There is as of yet no concept of relations between tokens, so features like sibling and descendant selectors in CSS, for use cases like "select variables in a class named x" or "select a variable x defined right after class y" are **not** possible. [For this we would need to parse an actual AST, too much work for now]
+### CHSS combinators
+All normal CSS combinators are supported:
+
+* [one or more space]: descendant combinator
+* `>`: child combinator 
+* `+`: next sibling combinator 
+* `~`: subsequent sibling combinator
+
+It's worth noting that the hierarchy of HTML elements displayed in the editor is not necessarily the same as the hierarchy of the actual nodes; in the following example we can see several instances of combinators that behave slightly differently than if we were using regular CSS on the editor's HTMl.
+
+![Example](./img/style_example.png)
+
+The property `length` is not considered a direct child of the function `test`, but a child of `varA` inside `test`. This also means that `varB` is the next sibling of `VarA`, so it is matched by the selector `varA + varB`.
+
+The selectors also ignore anything that isn't a *semantic token*.  
+This is demonstrated by the last `varB + varB` selector matching the `varB` token at the end even though it is separated by several lines of code from the previous occurrence as none of the content contains semantic identifiers.
+
 ### Advanced Selectors
 
-| Selector                  | Example                                         | Description                                                                                                                                              | Notes                                                                                                   |
-| ------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **<wildcard*match>**      | `<foo*bar>`                                     | select any token starting with 'foo' and ending with 'bar'                                                                                               | Multiple wildcards are allowed                                                                          |
-| **<*="include">**         | `<*="foo">`                                     | select any token which includes 'foo'                                                                                                                    | The Double quotes are technically optional but omitting them breaks the highlighting inside the rule.   |
-| **<^="start">**           | `<^="foo">`                                     | select any token starting with 'foo'                                                                                                                     |                                                                                                         |
-| **<$="end">**             | `<$="bar">`                                     | select any token ending with 'bar'                                                                                                                       |                                                                                                         |
-| **<"/regex/">**           | `<"/foo(bar)?/">`                               | select any token matching the regex /foo(bar)?/                                                                                                          | `<"/regex/i">` is supported for case insensitive matching                                               |
-| **<*="match"=type>**      | `<^="foo"=variable>, <$=bar=function:readonly>` | select variables starting with 'foo' and functions ending with 'bar'.                                                                                    | A regex match also needs to be prepended with `=` as in `<="/regex/"=type>` to work with type selectors |
-| **selector::pseudoclass** | `foo::before, .getFoo::light`                   | style the 'before' pseudo-class of any token named foo and the 'light' pseudo-class (styles only apply with light themes) of any function named 'getFoo' | the 'before' and 'after' pseudo-classes need the `text-content`/`textContent` property to be set.       |
+| Selector                      | Example                                                | Description                                                                                                                                                | Notes                                                                                                   |
+| ----------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **<wildcard*match>**          | `<foo*bar>`                                            | select any token starting with 'foo' and ending with 'bar'                                                                                                 | Multiple wildcards are allowed                                                                          |
+| **<*="include">**             | `<*="foo">`                                            | select any token which includes 'foo'                                                                                                                      | The Double quotes are technically optional but omitting them breaks the highlighting inside the rule.   |
+| **<^="start">**               | `<^="foo">`                                            | select any token starting with 'foo'                                                                                                                       |                                                                                                         |
+| **<$="end">**                 | `<$="bar">`                                            | select any token ending with 'bar'                                                                                                                         |                                                                                                         |
+| **<"/regex/">**               | `<"/foo(bar)?/">`                                      | select any token matching the regex /foo(bar)?/                                                                                                            | `<"/regex/i">` is supported for case insensitive matching                                               |
+| **<*="match"=type>**          | `<^="foo"=variable>, <$=bar=function:readonly>`        | select variables starting with 'foo' and functions ending with 'bar'.                                                                                      | A regex match also needs to be prepended with `=` as in `<="/regex/"=type>` to work with type selectors |
+| **selector::pseudoelement**   | `foo::before, .getFoo::light`                          | style the 'before' pseudo-class of any token named foo and the 'light' pseudo-element (styles only apply with light themes) of any function named 'getFoo' | the 'before' and 'after' pseudo-element need the `text-content`/`textContent` property to be set.       |
+| **selector:not(subselector)** | `foo:not([variable]), bar:not(:readonly,:declaration)` | style all tokens named 'foo' that aren't variables and all tokens named `bar` which don't have the *readonly* or *declaration* modifiers.                  | :not() can contain complex selectors and combinators. Howver, nested :not() selectors are not valid.    |
+
+### Further Pseudo Classes
+Besides the `:not()` pseudo class the following relational pseudo classes are supported as well:
+* `:empty`
+* `:nth-child()`
+* `:nth-last-child()`
+* `:nth-of-type()`
+* `:nth-last-of-type()`
+* `:first-child`
+* `:first-of-type`
+* `:last-child`
+* `:last-of-type`
+* `:only-child`
+* `:only-of-type`
+
+These all technically work like they do in regular CSS, but as pointed out in the combinators section, the parent-child hierarchy for tokens which is the basis of CHSS styling is not always the same the HTML elements that represent them.  
+In the case of all the `of-type` pseudo-classes "type" again refers to variable, function, class etc.  
+To summarize the difference between the approaches: `[function]:first-of-type` will match the first function in another element, wherever that is, while `[function]:first-child`, will only match the first child of an element *if* it is a function.
+
+The `:nth-` pseudo classes do *not* support their extended `of <selector>` syntax.
 
 ### Cascading
 CHSS attempts to follow the same general rules of weight that CSS does, with more specific rules having higher weight: Direct name selectors trump matches and types which trump modifiers.
@@ -182,8 +219,6 @@ This extension has the following settings:
 
 ## Planned Features & Roadmap
 
-* Brainstorming some very silly ideas about converting an AST to a DOM and running actual CSS selectors on it for proper positional selectors. This is going to be very inefficient. 
-* `:not()` pseudo class would be neat.
 * There used to be a fairly popular extension called [Apc Customize UI++](https://github.com/drcika/apc-extension) for injecting custom CSS which is unfortunately not working in recent VSCode versions. If it gets fixed, or another real-time CSS injector really takes off, it would be maybe possible to unlock the full power of CSS for CHSS.
 * *Maybe* adding support for selecting textmate scopes, (but VSCode also might pivot to Tree-Sitter as the language server fallback, so who knows). This is also going to be inefficient if it ever happens.
 

@@ -3,6 +3,16 @@
 All notable changes to the "vscode-chss" extension will be documented in this file.  
 Some less notable ones too.
 
+## [0.5.0]
+- **CHSS now supports actual CSS combinators!**
+  * Information from the DocumentSymbolProvider is used together with semantic tokens to create an HTML representation of the Document structure with linkeDOM on which actual CSS queries are executed.
+  * Added a debug option which shows the generated HTML DOM of the document.
+- Added support for the `:not()` pseudo-class.
+- Positional pseudo-classes such as `:nth-child()`, `:first-of-type`, `:last-of-type`, etc work as well.
+- Fixed inactive editors retaining older styles if the .chss file was edited while the editor was not visible.
+- Huge performance improvements yet again.
+- Fixed case insensitive RegExes not working.
+- Fixed wildcard name matches with multiple `*` wildcards not working correctly.
 ## [0.4.3]
 - Added support for selecting multiple types and modifiers with a single selector by separating them with slashes.
   * For example: `[property/variable]` or `:declaration/readonly`
