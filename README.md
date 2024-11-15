@@ -124,7 +124,7 @@ All normal CSS combinators are supported:
 
 It's worth noting that the hierarchy of HTML elements displayed in the editor is not necessarily the same as the hierarchy of the actual nodes; in the following example we can see several instances of combinators that behave slightly differently than if we were using regular CSS on the editor's HTMl.
 
-![Example](./img/style_example.png)
+![Example](https://raw.githubusercontent.com/Thertzlor/vscode-chss/refs/heads/main/img/style_example.png)
 
 The property `length` is not considered a direct child of the function `test`, but a child of `varA` inside `test`. This also means that `varB` is the next sibling of `VarA`, so it is matched by the selector `varA + varB`.
 
