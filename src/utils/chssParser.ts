@@ -331,7 +331,10 @@ export class ChssParser{
    */
   private async selectorsToMatches(selectors:ParsedSelector[],complex:boolean|undefined,tokenOject:TokenCollection,insensitive?:boolean,doc?:TextDocument,debug=false):Promise<FullMatch[]>{
     //If we don't have our DOM, but we need it, we initialize it here.
-    if (doc && complex &&!this.doms.has(doc.uri.toString())) this.doms.set(doc.uri.toString(), await DomSimulator.init(doc.uri, tokenOject,doc));
+    if (doc && complex &&!this.doms.has(doc.uri.toString())) {
+      const myDom = await DomSimulator.init(doc.uri, tokenOject,doc);
+      myDom && this.doms.set(doc.uri.toString(), myDom);
+    }
     // Debug WebView
     if (debug && this.doms.has(doc?.uri.toString() ?? '')){
       if (!this.webview){

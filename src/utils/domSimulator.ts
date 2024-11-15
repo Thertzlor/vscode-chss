@@ -43,7 +43,9 @@ const isPseudoClass = (m:string) => m === 'empty' || m.includes('-')|| m.include
 export class DomSimulator{
 
   static async init(target:Uri,tokens:TokenCollection, text:TextDocument){
-    return new DomSimulator(await commands.executeCommand('vscode.executeDocumentSymbolProvider',target),tokens,target,text);
+    const syms = await commands.executeCommand('vscode.executeDocumentSymbolProvider',target);
+    if (!syms) return;
+    return new DomSimulator(syms as DocumentSymbol[],tokens,target,text);
   }
 
   private constructor(
