@@ -26,6 +26,12 @@ The decorations defined by this extension will be put on top of any colors and f
 As mentioned, CHSS works on semantic tokens provided by the current language server, so make sure your project is in a language that has a semantic highlighting capable syntax highlighting extension installed. You can use the `Developer: Inspect Editor Tokens and Scopes` command to check which tokens and modifier are used.
 
 Since this extension needs to reevaluate all semantic tokens, re-read the file and then insert dozens or potentially hundreds of text decorations, using it with very huge files might not be the most performant.
+
+I have tested this extension with the following languages:
+* JavaScript
+* TypeScript
+* lua
+
 ##  The CHSS Syntax
 CHSS is basically vague bastardization of (S)CSS (.chss files also use VSCode's highlighting for scss).  
 This works out because style rules are internally converterted into [DecorationRenderOptions](https://code.visualstudio.com/api/references/vscode-api#DecorationRenderOptions) and most of the properties are css rules already.  
@@ -47,6 +53,11 @@ important_var {
 MyClass[class]{
   color: deepskyblue;
   text-decoration: overline;
+}
+
+// matches all parameters inside methods of class MyClass
+MyClass[class] > [method] [parameter] {
+  color: green;
 }
 
 // matches any token with the "declaration" modifier.
@@ -216,6 +227,7 @@ This extension has the following settings:
 *  `chss.stylesheetLocation`:Path or glob pattern for your code stylesheet.
 *  `chss.realtimeCHSS`:Apply style updates in real-time while editing the .chss file. Disable to only apply styles to the project once the .chss file is saved.
 *  `chss.caseInsensitiveMatch`:Enable to make normal selectors such as `name` and `[*=name]` also match tokens named `Name` and `myName` respectively. Regex matches are however still controlled with the /i flag.
+*  `chss.debugView`:Shows a representation of the generated code DOM in a WebView when styles are applied. Note that the DOM is only generated for rules with combinators and certain pseudo-classes.
 
 ## Planned Features & Roadmap
 
