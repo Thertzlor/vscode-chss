@@ -3,7 +3,7 @@
 All notable changes to the "vscode-chss" extension will be documented in this file.  
 Some less notable ones too.
 
-## [0.5.0]
+## [0.5.0] -- This really *should* have been the initial public release.
 - **CHSS now supports actual CSS combinators!**
   * Information from the DocumentSymbolProvider is used together with semantic tokens to create an HTML representation of the Document structure with linkeDOM on which actual CSS queries are executed.
   * Added a debug option which shows the generated HTML DOM of the document.
