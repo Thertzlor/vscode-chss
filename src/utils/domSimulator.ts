@@ -29,12 +29,12 @@ const tokenToSymbol = ({range,name}:TokenData):DocumentSymbol => ({range,childre
 const getNodeType = (sym:DocumentSymbol,token?:TokenData) => (token?.type??SymbolKind[sym.kind].toLowerCase()) as TokenKind;
 
 
-const convertModifier = (m:string,grouped:boolean) =>
-    //"none" excludes any other modifiers, so if it paired with anything, we prevent the selector from matching at all.
-  (m === 'none'?grouped?':not(*)':
-        //How do we match "no modifiers"? By excluding all class attributes with spaces, which means there's only a type class.
+const convertModifier = (m:string,grouped:boolean) => (
+  //"none" excludes any other modifiers, so if it paired with anything, we prevent the selector from matching at all.
+  m === 'none'?grouped?':not(*)':
+  //How do we match "no modifiers"? By excluding all class attributes with spaces, which means there's only a type class.
   ':not([class*=" "])':
-        //Regular modifiers are regular multi class selectors.
+  //Regular modifiers are regular multi class selectors.
   `.${m}`);
 
 

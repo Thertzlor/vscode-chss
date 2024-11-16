@@ -30,6 +30,7 @@ Since this extension needs to reevaluate all semantic tokens, re-read the file a
 I have tested this extension with the following languages:
 * JavaScript
 * TypeScript
+* Python
 * lua
 
 ##  The CHSS Syntax
