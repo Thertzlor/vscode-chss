@@ -2,6 +2,7 @@ src/**
 img/chss_logo*
 img/chss_icon_512.png
 img/chss_demo.gif
+img/style_example.png
 out/*
 node_modules/**
 .vscode/**
